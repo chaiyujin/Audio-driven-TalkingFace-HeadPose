@@ -23,10 +23,14 @@ import tensorflow as tf
 
 from . import camera_utils
 
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 rasterize_triangles_module = tf.load_op_library(
-    #os.path.join(os.environ['TEST_SRCDIR'],
-    os.path.join('/home4/yiran/TalkingFace/Pipeline/Deep3DFaceReconstruction',
-    'tf_mesh_renderer/mesh_renderer/kernels/rasterize_triangles_kernel.so'))
+  #os.path.join(os.environ['TEST_SRCDIR'],
+  os.path.join(
+    ROOT, 'Deep3DFaceReconstruction',
+    'tf_mesh_renderer/mesh_renderer/kernels/rasterize_triangles_kernel.so'
+  )
+)
 
 
 def rasterize(world_space_vertices, attributes, triangles, camera_matrices,

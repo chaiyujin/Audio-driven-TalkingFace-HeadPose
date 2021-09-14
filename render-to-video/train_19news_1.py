@@ -8,11 +8,11 @@ def get_news(n):
 	rootdir = os.path.join(os.getcwd(),'../Deep3DFaceReconstruction/output/render/')
 	srcdir = os.path.join(rootdir,video)
 	srcdir2 = srcdir.replace(video,video+'/bm')
-
 	if 'bmold' not in name:
 		cmd = "cd "+rootdir+"/..; matlab -nojvm -nosplash -nodesktop -nodisplay -r \"alpha_blend_news('" + video + "'," + str(start) + "," + str(trainN+testN) + "); quit;\""
 	else:
-		cmd = "cd "+rootdir+"/..; matlab -nojvm -nosplash -nodesktop -nodisplay -r \"alpha_blend_newsold('" + video + "'," + str(start) + "," + str(trainN+testN) + "); quit;\""
+		# cmd = "cd "+rootdir+"/..; matlab -nojvm -nosplash -nodesktop -nodisplay -r \"alpha_blend_newsold('" + video + "'," + str(start) + "," + str(trainN+testN) + "); quit;\""
+		cmd = "cd "+rootdir+"/..; python alpha_blend_newsold.py '" + video + "'"
 	os.system(cmd)
 	if not os.path.exists('datasets/list/trainA'):
 		os.makedirs('datasets/list/trainA')
@@ -47,11 +47,11 @@ def get_news(n):
 	f1.close()
 	f2.close()
 
-def save_each_60(folder):
+def save_each_epochs(folder, gap_epoch):
 	pths = sorted(glob.glob(folder+'/*.pth'))
 	for pth in pths:
 		epoch = os.path.basename(pth).split('_')[0]
-		if epoch == '60':
+		if int(epoch) % gap_epoch == 0 and int(epoch) > 0:
 			continue
 		os.remove(pth)
 
@@ -70,10 +70,10 @@ os.system(cmd)
 
 # fine tune the mapping
 n = str(n)
-cmd = 'python train.py --dataroot %s_bmold_win3 --name memory_seq_p2p/%s --model memory_seq --continue_train --epoch 0 --epoch_count 1 --lambda_mask 2 --lr 0.0001 --display_env memory_seq_%s --gpu_ids %d --niter 60 --niter_decay 0' % (n,n,n,gpu_id)
-os.system(cmd)
-save_each_60('checkpoints/memory_seq_p2p/%s'%n)
-
 epoch = 60
+cmd = 'python train.py --dataroot %s_bmold_win3 --name memory_seq_p2p/%s --model memory_seq --continue_train --epoch 0 --epoch_count 1 --lambda_mask 2 --lr 0.0001 --display_env memory_seq_%s --gpu_ids %d --niter %d --niter_decay 0 --save_epoch_freq 10' % (n,n,n,gpu_id,epoch)
+os.system(cmd)
+save_each_epochs('checkpoints/memory_seq_p2p/%s'%n, gap_epoch=epoch)
+
 cmd = 'python test.py --dataroot %s_bmold_win3 --name memory_seq_p2p/%s --model memory_seq --num_test 200 --epoch %d --gpu_ids %d --imagefolder images%d' % (n,n,epoch,gpu_id,epoch)
 os.system(cmd)
