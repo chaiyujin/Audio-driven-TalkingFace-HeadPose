@@ -3,5 +3,6 @@
         "editor.wordBasedSuggestions": false
     },
     "python.defaultInterpreterPath": "~/miniconda3/envs/py36/bin/python",
-    "python.terminal.activateEnvInCurrentTerminal": true
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.pythonPath": "/home/chaiyujin/miniconda3/envs/py36/bin/python"
 }

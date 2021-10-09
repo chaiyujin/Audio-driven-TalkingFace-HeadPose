@@ -15,7 +15,12 @@ Models/
 **/model/
 **/datasets/
 **/results/
+data/
 Data/
 Deep3DFaceReconstruction/output/
 Audio/sample/
 Audio/dataset/mfcc/
+
+# expection
+!render-to-video/data
+!render-to-video/models
