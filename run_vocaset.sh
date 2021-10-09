@@ -215,15 +215,21 @@ function RUN_VOCASET() {
         --dataroot ${clip_dir}/r2v_dataset \
         --dataname bmold \
         --checkpoints_dir ${NET_DIR}/r2v \
-        --results_dir ${clip_dir}/r2v_results \
+        --results_dir ${clip_dir}/r2v_reenact \
         --gpu_ids 0 \
-      ;
+      && cd ${CWD};
       if [[ $? != 0 ]]; then
         printf "${ERROR} Failed to run render-to-video!\n"
         continue
       fi
       touch ${r2v_flag};
     fi
+
+    python3 utils/blend_results.py \
+      --image_dir ${clip_dir}/crop \
+      --r2v_dir ${clip_dir}/r2v_reenact \
+      --output_dir ${clip_dir}/results \
+    ;
   done
 
   # local DONE_FLAG_ARCFACE=${DATA_DIR}/${SPEAKER}/done_arcface_test.flag
