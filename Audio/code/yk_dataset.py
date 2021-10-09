@@ -6,9 +6,9 @@ import pdb
 import pickle
 import random
 import time
+from glob import glob
 
 import cv2
-from glob import glob
 import numpy as np
 import python_speech_features
 import torch
@@ -27,10 +27,10 @@ def find_clip_dirs(data_dir, with_train, with_test):
     clip_dirs = []
     for dirpath, subdirs, _ in os.walk(data_dir):
         # check if train data
-        if os.path.basename(dirpath) == 'train' and not with_train:
+        if os.path.basename(dirpath) == "train" and not with_train:
             continue
         # check if test data
-        if os.path.basename(dirpath) == 'test' and not with_test:
+        if os.path.basename(dirpath) == "test" and not with_test:
             continue
         # collect
         for subdir in subdirs:
@@ -49,7 +49,7 @@ class MultiClips_1D_lstm_3dmm_pose(data.Dataset):
         relativeframe=0,
     ):
         self.train = train
-        self.training = (train == "train")
+        self.training = train == "train"
         self.num_frames = 16
         self.indexes = indexes
         self.relativeframe = relativeframe
@@ -99,7 +99,7 @@ class MultiClips_1D_lstm_3dmm_pose(data.Dataset):
 
             # insert into list
             data_dict = dict(clip_dir=clip_dir)
-            data_dict['mfccs'] = mfccs
+            data_dict["mfccs"] = mfccs
             data_dict["coeffc"] = torch.FloatTensor(coeffc)
             data_dict["coeffc2"] = torch.FloatTensor(coeffc2)
             n_frames = min(mfccs.shape[0], coeffc.shape[0], coeffc2.shape[0])
@@ -111,9 +111,9 @@ class MultiClips_1D_lstm_3dmm_pose(data.Dataset):
     def __getitem__(self, i_item):
         i_clip, index = self.coordinates[i_item]
         data_dict = self.data_list[i_clip]
-        coeffc  = data_dict['coeffc' ][index : index + 16]
-        mfccs   = data_dict['mfccs'  ][index : index + 16]
-        coeffc2 = data_dict['coeffc2'][index : index + 16]
+        coeffc = data_dict["coeffc"][index : index + 16]
+        mfccs = data_dict["mfccs"][index : index + 16]
+        coeffc2 = data_dict["coeffc2"][index : index + 16]
         return coeffc, mfccs, coeffc2
 
     def __len__(self):

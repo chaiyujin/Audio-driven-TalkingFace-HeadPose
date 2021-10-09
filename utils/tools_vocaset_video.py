@@ -161,7 +161,10 @@ def fill_hole(trans):
     return im_out[:, :, None]
 
 
-def alpha_blend(srcdir, tardir):
+def alpha_blend(srcdir, tardir, debug):
+    done_flag = os.path.join(tardir, "done.flag")
+    if os.path.exists(done_flag):
+        return
 
     os.makedirs(tardir, exist_ok=True)
 
@@ -178,31 +181,38 @@ def alpha_blend(srcdir, tardir):
         im3 = im3.astype(np.uint8)
         fname = os.path.basename(fpath)[:-4]
         cv2.imwrite(os.path.join(tardir, fname + "_renderold_bm.png"), im3)
-        # cv2.imshow('trans', trans)
-        # cv2.imshow('bm', im3)
-        # cv2.waitKey(1)
+        if debug:
+            ima = (trans * 255).astype(np.uint8).repeat(3, axis=-1)
+            cv2.imshow('debug-alpha', np.concatenate((im3, ima)))
+            cv2.waitKey(1)
+    
+    with open(done_flag, "w") as fp:
+        fp.write("")
 
 
-def build_r2v_dataset(dataset_dir, speaker, data_type):
+def build_r2v_dataset(dataset_dir, speaker, data_type, debug):
     name = speaker + "_bmold_win3"
 
+    dataset_dir = os.path.abspath(dataset_dir)
     r2v_dir = os.path.join(dataset_dir, speaker, "r2v_dataset")
 
-    # done flag
-    done_flag = os.path.join(r2v_dir, "done_r2v_dataset.flag")
-    if os.path.exists(done_flag):
-        print("Render to Video dataset is already generated: '{}'!".format(r2v_dir))
-        return
+    if data_type == "train":
+        clip_dirs = find_clip_dirs(os.path.join(dataset_dir, speaker), data_type == "train", data_type == "test")
+        names = [speaker + "_bmold_win3", speaker + "_bmold"]
+    else:
+        assert speaker.split('/')[-1].startswith('clip')
+        assert speaker.split('/')[-2] == "test"
+        clip_dirs = [os.path.join(dataset_dir, speaker)]
+        names = ["bmold_win3", "bmold"]
 
     # blend all clips
-    dataset_dir = os.path.abspath(dataset_dir)
-    clip_dirs = find_clip_dirs(os.path.join(dataset_dir, speaker), data_type == "train", data_type == "test")
-    for clip_dir in tqdm(clip_dirs, desc="blend"):
-        assert os.path.exists(os.path.join(clip_dir, "render")), "You haven't reconstruct 3D yet! ({})".format(clip_dir)
-        if os.path.exists(os.path.join(clip_dir, "render")):
-            alpha_blend(os.path.join(clip_dir, "render"), os.path.join(clip_dir, "render", "bm"))
+    for clip_dir in tqdm(clip_dirs, desc="blend", leave=False):
+        render_dir = os.path.join(clip_dir, "render" if data_type == "train" else "render_reenact")
+        assert os.path.exists(render_dir), "You haven't reconstruct 3D yet! ({})".format(clip_dir)
+        if os.path.exists(render_dir):
+            alpha_blend(render_dir, os.path.join(render_dir, "bm"), debug=debug)
 
-    for name in [speaker + "_bmold_win3", speaker + "_bmold"]:
+    for name in names:
         assert "bmold" in name
         start = 0
         start1 = (start + 2) if "win3" in name else start
@@ -229,18 +239,14 @@ def build_r2v_dataset(dataset_dir, speaker, data_type):
             f1 = open(os.path.join(r2v_dir, f"list/testA/{name}.txt"), "w")
             f2 = open(os.path.join(r2v_dir, f"list/testB/{name}.txt"), "w")
             for clip_dir in clip_dirs:
-                real_dir = os.path.join(clip_dir, "render")
-                fake_dir = os.path.join(clip_dir, "render", "bm")
+                real_dir = os.path.join(clip_dir, "render_reenact")
+                fake_dir = os.path.join(clip_dir, "render_reenact", "bm")
                 n_frames = len(glob(os.path.join(fake_dir, "*.png")))
                 for i in range(start1, start + n_frames):
                     print(os.path.join(fake_dir, "frame%d_renderold_bm.png" % i), file=f1)
                     print(os.path.join(real_dir, "frame%d.png" % i), file=f2)
             f1.close()
             f2.close()
-
-    # done flag
-    with open(done_flag, "w") as fp:
-        fp.write("")
 
 
 if __name__ == "__main__":
@@ -265,4 +271,4 @@ if __name__ == "__main__":
             prepare_vocaset_video(args.dataset_dir, args.source_dir, spk, dest_size=args.dest_size, debug=args.debug, training=False)
     elif args.mode == "build_r2v_dataset":
         for spk in args.speakers:
-            build_r2v_dataset(args.dataset_dir, spk, args.data_type)
+            build_r2v_dataset(args.dataset_dir, spk, args.data_type, debug=args.debug)

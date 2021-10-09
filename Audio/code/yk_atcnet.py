@@ -15,8 +15,8 @@ from torch.nn import init
 from torch.nn.modules.module import _addindent
 from torch.utils.data import DataLoader
 
-from yk_dataset import MultiClips_1D_lstm_3dmm_pose
 from models import ATC_net
+from yk_dataset import MultiClips_1D_lstm_3dmm_pose
 
 
 def multi2single(model_path, id):
@@ -235,7 +235,7 @@ class Trainer:
                 t0 = time.time()
             if (epoch + 1) % config.save_per_epochs == 0:
                 print("[{}/{}][{}/{}]   save model".format(epoch + 1, config.max_epochs, step + 1, num_steps_per_epoch))
-                torch.save(self.generator.state_dict(), "{}/atcnet_lstm_{}.pth".format(config.model_dir, epoch+1))
+                torch.save(self.generator.state_dict(), "{}/atcnet_lstm_{}.pth".format(config.model_dir, epoch + 1))
         print("total time: {} second".format(time.time() - t00))
 
     def _reset_gradients(self):

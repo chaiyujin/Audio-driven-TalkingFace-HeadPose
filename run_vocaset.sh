@@ -65,9 +65,9 @@ function RUN_VOCASET() {
   # *------------------------------------------- Train Audio to Expression ------------------------------------------* #
   DRAW_DIVIDER
 
-  local A2C_DONE_FLAG="${NET_DIR}/atcnet/atcnet_lstm_${EPOCH_A2C}.pth"
-  if [ -f "$A2C_DONE_FLAG" ]; then
-    printf "Audio to Expression network is already trained: '$A2C_DONE_FLAG'\n"
+  local CKPT_A2C="${NET_DIR}/atcnet/atcnet_lstm_${EPOCH_A2C}.pth"
+  if [ -f "$CKPT_A2C" ]; then
+    printf "Audio to Expression network is already trained: '$CKPT_A2C'\n"
   else
     cd $CWD/Audio/code && \
       python3 yk_atcnet.py \
@@ -155,6 +155,77 @@ function RUN_VOCASET() {
 
   # # *----------------------------------------------------- Test -----------------------------------------------------* #
 
+
+  for ((i=20;i<21;i++)); do
+    local clip=$(printf clip"%02d" $i)
+    local clip_dir=$DATA_DIR/$SPEAKER/test/$clip
+    local audio_path=$clip_dir/audio/audio.wav
+    local pred_coeff_dir=$clip_dir/coeff_pred
+
+    printf "Running test for $SPEAKER/test/$clip\n"
+
+    # predict coefficients from audio
+    cd $CWD/Audio/code && \
+    python3 yk_atcnet_test.py --pose 1 --relativeframe 0 --dataset multi_clips --device_ids 0 \
+      --model_name ${CKPT_A2C} \
+      --in_file ${audio_path} \
+      --sample_dir ${pred_coeff_dir} \
+    && \
+    cd $CWD
+
+    # reenact with predicted coefficients
+    cd $CWD/Deep3DFaceReconstruction && \
+    python3 reenact_vocaset.py ${clip_dir} && \
+    cd $CWD
+
+    # prepare test data
+    python3 utils/tools_vocaset_video.py build_r2v_dataset \
+      --dataset_dir $DATA_DIR \
+      --speakers $SPEAKER/test/$clip \
+      --data_type test \
+      ${DEBUG} \
+    ;
+
+    # prepare arcface feature
+    local arcface_flag=${clip_dir}/done_arcface.flag
+    if [ -f "${arcface_flag}" ]; then
+      printf "Arcface is already runned\n"
+    else
+      cd ${CWD}/render-to-video/arcface && python3 yk_test_batch.py \
+        --imglist ${clip_dir}/r2v_dataset/list/testB/bmold.txt --gpu 0 \
+      && cd ${CWD};
+      if [[ $? != 0 ]]; then
+        printf "${ERROR} Failed to prepare arcface feature for render-to-video!\n"
+        continue
+      fi
+      touch ${arcface_flag};
+    fi
+
+    local r2v_flag=${clip_dir}/done_r2v.flag
+    if [ -f "${r2v_flag}" ]; then
+      printf "Render-to-Video is already runned\n"
+    else
+      cd ${CWD}/render-to-video && \
+      python3 yk_test.py \
+        --model yk_memory_seq \
+        --name memory_seq_p2p/${SPEAKER} \
+        --num_test 200 \
+        --imagefolder '' \
+        --epoch ${EPOCH_R2V} \
+        --dataroot ${clip_dir}/r2v_dataset \
+        --dataname bmold \
+        --checkpoints_dir ${NET_DIR}/r2v \
+        --results_dir ${clip_dir}/r2v_results \
+        --gpu_ids 0 \
+      ;
+      if [[ $? != 0 ]]; then
+        printf "${ERROR} Failed to run render-to-video!\n"
+        continue
+      fi
+      touch ${r2v_flag};
+    fi
+  done
+
   # local DONE_FLAG_ARCFACE=${DATA_DIR}/${SPEAKER}/done_arcface_test.flag
   # if [ -f "${DONE_FLAG_ARCFACE}" ]; then
   #   printf "Arcface is already runned\n"
@@ -168,19 +239,6 @@ function RUN_VOCASET() {
   #   touch ${DONE_FLAG_ARCFACE};
   # fi
 
-  # cd ${CWD}/render-to-video && \
-  # python3 yk_test.py \
-  #   --model yk_memory_seq \
-  #   --name memory_seq_p2p/${SPEAKER} \
-  #   --num_test 200 \
-  #   --imagefolder '' \
-  #   --epoch ${EPOCH_R2V} \
-  #   --dataroot ${DATA_DIR}/${SPEAKER}/r2v_dataset \
-  #   --dataname ${SPEAKER}_bmold \
-  #   --checkpoints_dir ${NET_DIR}/r2v \
-  #   --results_dir ${DATA_DIR}/${SPEAKER}/r2v_results \
-  #   --gpu_ids 0 \
-  # ;
 
 }
 

@@ -52,7 +52,7 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     short_path1 = ntpath.basename(ntpath.dirname(image_path[0]))
     short_path = short_path1 + '-' + short_path
     name = os.path.splitext(short_path)[0]
-    image_dir = os.path.join(image_dir, "test", clip_id)
+    # image_dir = os.path.join(image_dir, "test", clip_id)
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
 
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
     # create a website
-    web_dir = os.path.join(opt.results_dir, f'epoch{opt.epoch}')  # define the website directory
+    web_dir = os.path.join(opt.results_dir)  # define the website directory
     #webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch), refresh=0, folder=opt.imagefolder)
     # test with eval mode. This only affects layers like batchnorm and dropout.
