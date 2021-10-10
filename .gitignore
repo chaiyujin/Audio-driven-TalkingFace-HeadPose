@@ -20,6 +20,7 @@ Data/
 Deep3DFaceReconstruction/output/
 Audio/sample/
 Audio/dataset/mfcc/
+tmp.sh
 
 # expection
 !render-to-video/data

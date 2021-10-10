@@ -123,7 +123,6 @@ function RUN_VOCASET() {
   if [ -f "${DONE_FLAG_R2V}" ]; then
     printf "Render to Video network is already trained: '$DONE_FLAG_R2V'\n"
   else
-    exit
     if [ ! -f ${NET_DIR}/r2v/memory_seq_p2p/0_net_mem.pth ]; then
       ln -s ${CWD}/render-to-video/checkpoints/memory_seq_p2p/0_net_G.pth ${NET_DIR}/r2v/memory_seq_p2p/0_net_G.pth &&
       ln -s ${CWD}/render-to-video/checkpoints/memory_seq_p2p/0_net_D.pth ${NET_DIR}/r2v/memory_seq_p2p/0_net_D.pth &&
@@ -151,9 +150,16 @@ function RUN_VOCASET() {
       printf "${ERROR} Failed to train render-to-video network!\n"
       exit 1
     fi
+
+    # rm latest_* to save disk space
+    if [ -f "${NET_DIR}/r2v/memory_seq_p2p/$SPEAKER/latest_net_G.pth" ]; then
+      rm "${NET_DIR}/r2v/memory_seq_p2p/$SPEAKER/latest_net_mem.pth"
+      rm "${NET_DIR}/r2v/memory_seq_p2p/$SPEAKER/latest_net_D.pth"
+      rm "${NET_DIR}/r2v/memory_seq_p2p/$SPEAKER/latest_net_G.pth"
+    fi
   fi
 
-  # # *----------------------------------------------------- Test -----------------------------------------------------* #
+  # *----------------------------------------------------- Test -----------------------------------------------------* #
 
 
   for ((i=20;i<21;i++)); do
@@ -227,25 +233,17 @@ function RUN_VOCASET() {
 
     python3 utils/blend_results.py \
       --image_dir ${clip_dir}/crop \
+      --coeff_dir ${clip_dir}/coeff_reenact \
       --r2v_dir ${clip_dir}/r2v_reenact \
       --output_dir ${clip_dir}/results \
     ;
+
+    ffmpeg -y -loglevel error \
+      -thread_queue_size 8192 -i $clip_dir/results/%06d_real.png \
+      -thread_queue_size 8192 -i $clip_dir/results/%06d_fake.png \
+      -thread_queue_size 8192 -i $audio_path \
+      -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
+      $clip_dir/result-real_fake.mp4 \
+    ;
   done
-
-  # local DONE_FLAG_ARCFACE=${DATA_DIR}/${SPEAKER}/done_arcface_test.flag
-  # if [ -f "${DONE_FLAG_ARCFACE}" ]; then
-  #   printf "Arcface is already runned\n"
-  # else
-  #   cd ${CWD}/render-to-video/arcface && python3 yk_test_batch.py \
-  #     --imglist ${DATA_DIR}/${SPEAKER}/r2v_dataset/list/testB/${SPEAKER}_bmold.txt --gpu 0
-  #   if [[ $? != 0 ]]; then
-  #     printf "${ERROR} Failed to prepare arcface feature for render-to-video!\n"
-  #     exit 1
-  #   fi
-  #   touch ${DONE_FLAG_ARCFACE};
-  # fi
-
-
 }
-
-RUN_VOCASET --epoch_a2c=10 --epoch_r2v=5 --debug
