@@ -252,7 +252,7 @@ def build_r2v_dataset(dataset_dir, speaker, data_type, debug):
 if __name__ == "__main__":
     import argparse
 
-    ROOT = os.path.dirname(os.path.abspath(__file__))
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     CHOICES = ['prepare', 'build_r2v_dataset']
 
     parser = argparse.ArgumentParser()
