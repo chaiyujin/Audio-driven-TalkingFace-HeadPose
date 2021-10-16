@@ -29,18 +29,22 @@ def load_graph(graph_filename):
     return graph_def
 
 
-def demo(clip_dir):
-    clip_dir = os.path.abspath(clip_dir)
-    done_flag = os.path.join(clip_dir, "done_reenact.flag")
-    if os.path.exists(done_flag):
-        print("Rendering is already done for {}".format(clip_dir))
-        return
+def demo(src_dir, tgt_dir):
+
+    def _iframe(x):
+        return int(os.path.basename(os.path.splitext(x)[0]).replace("frame", ""))
+
+    src_dir = os.path.abspath(src_dir)
+    tgt_dir = os.path.abspath(tgt_dir)
 
     # input and output folder
-    coeff_list = glob.glob(os.path.join(clip_dir, "coeff_pred/*.npy"), recursive=True)
-    coeff_list = sorted(coeff_list)
-    for x in coeff_list:
-        assert x.find("test") >= 0
+    coeff_list = glob.glob(os.path.join(src_dir, "coeff_pred/*.npy"))
+    coeff_list = sorted(coeff_list, key=_iframe)
+    # for x in coeff_list:
+    #     assert x.find("test") >= 0
+
+    # get target images
+    image_list = sorted(glob.glob(os.path.join(tgt_dir, "crop/frame*.png")), key=_iframe)
 
     # read BFM face model
     # transfer original BFM model to our model
@@ -74,20 +78,23 @@ def demo(clip_dir):
         encode_png = tf.image.encode_png(rstimg)
 
         with tf.Session() as sess:
-            for file in tqdm(coeff_list, desc="rendering"):
-                fname = "frame" + str(int(os.path.basename(os.path.splitext(file)[0])))
-                seq_dir = os.path.dirname(os.path.dirname(file))
-                save_dir_coeff = os.path.join(seq_dir, "coeff_reenact")
-                save_dir_render = os.path.join(seq_dir, "render_reenact")
+            for iframe, file in enumerate(tqdm(coeff_list, desc="reenact")):
+                n += 1
+                assert iframe == _iframe(file)
+                fname = "frame" + str(iframe)
+                save_dir_coeff = os.path.join(src_dir, "reenact/coeff")
+                save_dir_render = os.path.join(src_dir, "reenact/render")
                 create_dirs(save_dir_coeff)
                 create_dirs(save_dir_render)
 
-                n += 1
                 # load coeffs
                 coeff_pred = np.load(file)
+
                 # load images and corresponding 5 facial landmarks
-                file = os.path.join(seq_dir, "crop", fname + ".png")
+                file = image_list[iframe]
+                assert iframe == _iframe(file)
                 img, lm = load_img(file, file[:-4] + ".txt")
+
                 # preprocess input image
                 input_img, lm_new, transform_params = Preprocess(img, lm, lm3D)
 
@@ -157,10 +164,6 @@ def demo(clip_dir):
     t2 = time.time()
     print("Total n:", n, "Time:", t2 - t1)
 
-    # done flag
-    with open(done_flag, "w") as fp:
-        fp.write("")
-
 
 if __name__ == "__main__":
-    demo(sys.argv[1])
+    demo(sys.argv[1], sys.argv[2])

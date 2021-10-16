@@ -77,7 +77,14 @@ class MultiClips_1D_lstm_3dmm_pose(data.Dataset):
             def _iframe(path):
                 return int(os.path.basename(path)[5:-4])
 
-            coeff_paths = glob(os.path.join(clip_dir, "coeff", "frame*.mat"))
+            ss = clip_dir.split('/')
+            assert ss[-1].startswith("clip")
+            assert ss[-2] == "train"
+            assert ss[-3] == "data"
+            ss[-3] = "reconstructed"
+            recons_dir = '/'.join(ss)
+
+            coeff_paths = glob(os.path.join(recons_dir, "coeff", "frame*.mat"))
             coeff_paths = sorted(coeff_paths, key=lambda x: _iframe(x))
             coeff = np.zeros((len(coeff_paths), 257), dtype=np.float32)
             for i, coeff_path in enumerate(coeff_paths):

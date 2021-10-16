@@ -43,11 +43,10 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     clip_id = ss[-1]
     for i in range(len(ss)-2, 1, -1):
         subdir = ss[i]
-        if subdir.startswith('clip'):
+        if subdir.startswith('clip-'):
             clip_id = subdir
-            assert ss[i-1] == 'test'
             break
-    assert clip_id.startswith('clip')
+    assert clip_id.startswith('clip-')
     short_path = ntpath.basename(image_path[0])
     short_path1 = ntpath.basename(ntpath.dirname(image_path[0]))
     short_path = short_path1 + '-' + short_path

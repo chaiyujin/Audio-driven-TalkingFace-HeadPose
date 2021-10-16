@@ -29,18 +29,11 @@ def load_graph(graph_filename):
     return graph_def
 
 
-def demo(speaker_dir):
-    done_flag = os.path.join(speaker_dir, "done_recons.flag")
-    if os.path.exists(done_flag):
-        print("Reconstruction is already done for {}".format(speaker_dir))
-        return
-
+def demo(speaker_dir, output_dir):
     # input and output folder
-    img_list = glob.glob(os.path.join(speaker_dir, "**/train/clip**/crop/*.txt"), recursive=True)
+    img_list = glob.glob(os.path.join(speaker_dir, "train/clip**/crop/*.txt"), recursive=True)
     img_list = [e[:-4] + ".png" for e in img_list]
     img_list = sorted(img_list)
-    for x in img_list:
-        assert x.find("test") < 0
     print("img_list len:", len(img_list))
 
     # read BFM face model
@@ -100,10 +93,12 @@ def demo(speaker_dir):
                 result_image = np.clip(result_image, 0.0, 1.0).copy(order="C")
                 result_bytes = sess.run(encode_png, {rstimg: result_image * 255.0})
 
-                fname = os.path.basename(os.path.splitext(file)[0])
-                seq_dir = os.path.dirname(os.path.dirname(file))
-                save_dir_coeff = os.path.join(seq_dir, "coeff")
-                save_dir_render = os.path.join(seq_dir, "render")
+                # get save path
+                ss = os.path.splitext(file)[0].split('/')
+                fname = ss[-1]
+                save_dir = os.path.join(output_dir, ss[-4], ss[-3])
+                save_dir_coeff = os.path.join(save_dir, "coeff")
+                save_dir_render = os.path.join(save_dir, "render")
                 create_dirs(save_dir_coeff)
                 create_dirs(save_dir_render)
 
@@ -127,10 +122,6 @@ def demo(speaker_dir):
     t2 = time.time()
     print("Total n:", n, "Time:", t2 - t1)
 
-    # done flag
-    with open(done_flag, "w") as fp:
-        fp.write("")
-
 
 if __name__ == "__main__":
-    demo(sys.argv[1])
+    demo(sys.argv[1], sys.argv[2])

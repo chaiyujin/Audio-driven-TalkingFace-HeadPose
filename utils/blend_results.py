@@ -57,7 +57,7 @@ def blend_results(output_dir, r2v_dir, coeff_dir, image_dir):
         coe_path = os.path.join(coeff_dir, f"frame{iframe}.mat")
         img_path = os.path.join(image_dir, f"frame{iframe}.png")
         msk_path = os.path.join(r2v_dir, f"bm-frame{iframe}_renderold_bm_fake_B_mask_vis.png")
-        # r2v_path = os.path.join(os.path.dirname(r2v_dir), "render_reenact", "bm", f"frame{iframe}_renderold_bm.png")
+        # r2v_path = os.path.join(os.path.dirname(r2v_dir), "reenact/render", "bm", f"frame{iframe}_renderold_bm.png")
 
         # transform back
         transform_params = loadmat(coe_path)["transform_params"]
