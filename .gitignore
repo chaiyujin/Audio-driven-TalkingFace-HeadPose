@@ -21,6 +21,7 @@ Deep3DFaceReconstruction/output/
 Audio/sample/
 Audio/dataset/mfcc/
 tmp.sh
+.nohup*
 
 # expection
 !render-to-video/data

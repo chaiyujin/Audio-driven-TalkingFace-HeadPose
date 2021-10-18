@@ -7,6 +7,21 @@ from glob import glob
 from scipy.io import loadmat
 
 
+def fill_hole(trans):
+    im_th = trans[..., 0]
+    # Copy the thresholded image.
+    im_floodfill = im_th.copy()
+    
+    # Mask used to flood filling.
+    # Notice the size needs to be 2 pixels than the image.
+    h, w = im_th.shape[:2]
+    mask = np.zeros((h+2, w+2), np.uint8)
+    cv2.floodFill(im_floodfill, mask, (0,0), 255)
+    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+    im_out = im_th | im_floodfill_inv
+    return im_out[:, :, None]
+
+
 def inverse_transform(img, transform_params):
     rec_img = Image.fromarray(img)
 
@@ -66,15 +81,20 @@ def blend_results(output_dir, r2v_dir, coeff_dir, image_dir):
         im_inv, valid = inverse_transform(im_r2v, transform_params)
         im_msk, _ = inverse_transform(255-cv2.imread(msk_path), transform_params)
 
+        # get mask of face
+        mask = np.where(valid == 255, im_msk, np.zeros_like(im_msk))
+        mask = (np.all(mask >= 240, axis=-1, keepdims=True) * 255).astype(np.uint8)
+        mask = fill_hole(mask).repeat(3, axis=-1)
+
         # merge
         img = cv2.imread(img_path)
-        merged = np.where(valid == 255, im_inv, img)
-        mask = np.where(valid == 255, im_msk, np.zeros_like(im_msk))
+        merged = np.where(mask == 255, im_inv, img)
 
         cv2.imwrite(os.path.join(output_dir, f"{iframe:06d}_real.png"), img)
         cv2.imwrite(os.path.join(output_dir, f"{iframe:06d}_fake.png"), merged)
         cv2.imwrite(os.path.join(output_dir, f"{iframe:06d}_mask.png"), mask)
 
+        # cv2.imshow("valid", mask)
         # masked = np.where((mask == 255).all(axis=-1, keepdims=True), merged, np.zeros_like(merged))
         # cv2.imshow('img', np.concatenate((img, merged, mask, masked), axis=1))
         # cv2.waitKey(16)

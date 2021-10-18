@@ -219,8 +219,8 @@ function TrainR2V() {
       --dataroot ${DATA_DIR}/../r2v_dataset \
       --dataname bmold_win3 \
       --niter_decay 0 \
-      --niter ${EPOCH} \
-      --save_epoch_freq ${EPOCH} \
+      --niter           ${EPOCH} \
+      --save_epoch_freq 20 \
       --checkpoints_dir ${NET_DIR}/r2v \
     && cd ${CWD}) ; then
       printf "${ERROR} Failed to train render-to-video network!\n"
