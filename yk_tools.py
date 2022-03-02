@@ -80,10 +80,10 @@ def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=Fal
         for fpath in files:
             # ! HACK: Only one video source
             if training:
-                if re.match(r"trn-000\.mp4", fpath) is not None:
+                if re.match(r"trn-000-fps25\.mp4", fpath) is not None:
                     tasks.append(os.path.join(cur_root, fpath))
             else:
-                if re.match(r"tst-000\.mp4", fpath) is not None:
+                if re.match(r"tst-000-fps25\.mp4", fpath) is not None:
                     tasks.append(os.path.join(cur_root, fpath))
             # if training:
             #     if re.match(r"trn-\d+\.mp4", fpath) is not None:
@@ -96,8 +96,9 @@ def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=Fal
     for vpath in tqdm(tasks, desc=f"[prepare_celebtalk]: {os.path.basename(data_root)}"):
         # data source
         lpath = os.path.splitext(vpath)[0] + "-lmks-ibug-68.toml"
+        assert os.path.exists(lpath)
         # output dir
-        seq_id = os.path.basename(os.path.splitext(vpath)[0])
+        seq_id = os.path.basename(os.path.splitext(vpath)[0]).replace("-fps25", "")
         out_dir = os.path.join(output_root, f"clip-{seq_id}")
         # preprocess
         _preprocess_video(out_dir, vpath, lpath, dest_size, debug)
@@ -114,7 +115,8 @@ def _preprocess_video(out_dir, vpath, lpath, dest_size, debug):
     os.makedirs(os.path.join(out_dir, "audio"), exist_ok=True)
 
     # 1. -> 25 fps images and audio
-    assert os.system(f"ffmpeg -loglevel error -hide_banner -y -i {vpath} -r 25 {out_dir}/full/%05d.png") == 0
+    # assert os.system(f"ffmpeg -loglevel error -hide_banner -y -i {vpath} -r 25 {out_dir}/full/%05d.png") == 0
+    assert os.system(f"ffmpeg -loglevel error -hide_banner -y -i {vpath} {out_dir}/full/%05d.png") == 0
     assert os.system(f"ffmpeg -loglevel error -hide_banner -y -i {vpath} {out_dir}/audio/audio.wav") == 0
     
     # 2. dump audio feature
@@ -136,7 +138,7 @@ def _preprocess_video(out_dir, vpath, lpath, dest_size, debug):
         save_prefix = f"{out_dir}/crop/frame{i_frm}"
         img = cv2.imread(img_path)
         # fetch lmk
-        ts = i_frm * 1000.0 / 25.0 - 60  # HACK
+        ts = i_frm * 1000.0 / 25.0  # HACK
         while i_lmk < len(lmks_data['frames']) and _i_lmk_to_ts(i_lmk) <= ts:
             i_lmk += 1
         jframe = np.clip(i_lmk, 0, len(lmks_data['frames']) - 1)
