@@ -58,6 +58,8 @@ class MultiClips_1D_lstm_3dmm_pose(data.Dataset):
         self.coordinates = []
         clip_dirs = find_clip_dirs(os.path.abspath(dataset_dir), self.training, not self.training)
         for i_clip, clip_dir in enumerate(clip_dirs):
+            print(">> {}".format(clip_dir))
+
             # * MFCC
             mfcc_path = os.path.join(clip_dir, "audio", "mfcc.npy")
             mfcc = np.load(mfcc_path)

@@ -68,7 +68,7 @@ def prepare_vocaset(output_root, data_root, training, dest_size=256, debug=False
         _preprocess_video(out_dir, vpath, lpath, dest_size, debug)
 
 
-def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=False):
+def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=False, use_seqs=()):
     # output root
     output_root = os.path.expanduser(output_root)
     output_root = os.path.join(output_root, "train" if training else "test")
@@ -78,20 +78,17 @@ def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=Fal
     tasks = []
     for cur_root, _, files in os.walk(data_root):
         for fpath in files:
-            # ! HACK: Only one video source
+            seq_id = os.path.splitext(fpath)[0].replace("-fps25", "")
+            if seq_id not in use_seqs:
+                continue
             if training:
-                if re.match(r"trn-000-fps25\.mp4", fpath) is not None:
+                if re.match(r"trn-\d+-fps25\.mp4", fpath) is not None:
                     tasks.append(os.path.join(cur_root, fpath))
             else:
-                if re.match(r"vld-000-fps25\.mp4", fpath) is not None:
+                if re.match(r"vld-\d+-fps25\.mp4", fpath) is not None:
                     tasks.append(os.path.join(cur_root, fpath))
-            # if training:
-            #     if re.match(r"trn-\d+\.mp4", fpath) is not None:
-            #         tasks.append(os.path.join(cur_root, fpath))
-            # else:
-            #     if re.match(r"tst-\d+\.mp4", fpath) is not None:
-            #         tasks.append(os.path.join(cur_root, fpath))
         break
+    print(tasks)
 
     for vpath in tqdm(tasks, desc=f"[prepare_celebtalk]: {os.path.basename(data_root)}"):
         # data source
@@ -126,34 +123,12 @@ def _preprocess_video(out_dir, vpath, lpath, dest_size, debug):
     with open(lpath) as fp:
         lmks_data = toml.load(fp)
 
-    def _i_lmk_to_ts(i):
-        ts = lmks_data['frames'][i]['ms']
-        if ts <= 0:
-            ts = i * 1000.0 / lmks_data['fps']
-        return ts
-
-    i_lmk = 0
     img_list = sorted(glob(f"{out_dir}/full/*.png"))
     for i_frm, img_path in enumerate(img_list):
         save_prefix = f"{out_dir}/crop/frame{i_frm}"
         img = cv2.imread(img_path)
         # fetch lmk
-        ts = i_frm * 1000.0 / 25.0  # HACK
-        while i_lmk < len(lmks_data['frames']) and _i_lmk_to_ts(i_lmk) <= ts:
-            i_lmk += 1
-        jframe = np.clip(i_lmk, 0, len(lmks_data['frames']) - 1)
-        iframe = np.clip(i_lmk - 1, 0, len(lmks_data['frames']) - 1)
-        pts0 = np.asarray(lmks_data['frames'][iframe]['points'], dtype=np.float32)
-        pts1 = np.asarray(lmks_data['frames'][jframe]['points'], dtype=np.float32)
-        ts0 = _i_lmk_to_ts(iframe)
-        ts1 = _i_lmk_to_ts(jframe)
-        if np.isclose(ts0, ts1):
-            a = 1
-        else:
-            a = (ts - ts0) / (ts1 - ts0)
-        a = np.clip(a, 0, 1)
-        assert 0 <= a <= 1
-        pts = pts0 * (1-a) + pts1 * a
+        pts = np.asarray(lmks_data['frames'][i_frm]['points'], dtype=np.float32)
 
         # resize
         pts[:, 0] = pts[:, 0] / img.shape[1] * dest_size
@@ -304,6 +279,7 @@ if __name__ == "__main__":
     parser.add_argument("--celebtalk_dir", type=str, default="~/assets/CelebTalk")
     parser.add_argument("--dest_size", type=int, default=256)
     parser.add_argument("--speaker", type=str, default="FaceTalk_170908_03277_TA")
+    parser.add_argument("--use_seqs", type=str, default="")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--data_type", type=str, choices=['train', 'test'])
     args = parser.parse_args()
@@ -314,7 +290,8 @@ if __name__ == "__main__":
         prepare_vocaset(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=False)
     elif args.mode == "prepare_celebtalk":
         spk_dir = os.path.join(args.celebtalk_dir, "ProcessTasks", args.speaker, "clips_cropped")
-        prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=True)
-        prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=False)
+        use_seqs = args.use_seqs
+        prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, use_seqs=use_seqs, training=True)
+        prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, use_seqs=use_seqs, training=False)
     elif args.mode == "build_r2v_dataset":
         build_r2v_dataset(args.data_dir, args.data_type, debug=args.debug)

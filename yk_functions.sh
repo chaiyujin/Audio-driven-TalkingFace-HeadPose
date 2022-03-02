@@ -81,6 +81,7 @@ function PrepareData() {
   local DATA_DIR=
   local SPEAKER=
   local DEBUG=
+  local USE_SEQS=
   # Override from arguments
   for var in "$@"; do
     case $var in
@@ -88,6 +89,7 @@ function PrepareData() {
       --data_dir=* ) DATA_DIR=${var#*=}  ;;
       --speaker=*  ) SPEAKER=${var#*=}   ;;
       --epoch=*    ) EPOCH=${var#*=}     ;;
+      --use_seqs=* ) USE_SEQS=${var#*=}  ;;
       --debug      ) DEBUG="--debug"     ;;
     esac
   done
@@ -97,7 +99,7 @@ function PrepareData() {
   [ -n "$SPEAKER"  ] || { echo "speaker is not set!";  exit 1; }
 
   # prepare data
-  if ! python3 yk_tools.py "prepare_${DATA_SRC}" --data_dir $DATA_DIR --speaker $SPEAKER ${DEBUG}; then
+  if ! python3 yk_tools.py "prepare_${DATA_SRC}" --data_dir $DATA_DIR --speaker $SPEAKER --use_seqs $USE_SEQS ${DEBUG}; then
     printf "${ERROR} Failed to prepare data for ${DATA_SRC}!\n"
     exit 1
   fi
@@ -375,6 +377,7 @@ function RUN_YK_EXP() {
   local EPOCH_A2E=
   local EPOCH_R2V=
   local DEBUG=""
+  local USE_SEQS=""
   # Override from arguments
   for var in "$@"; do
     case $var in
@@ -383,6 +386,7 @@ function RUN_YK_EXP() {
       --epoch_a2e=* ) EPOCH_A2E=${var#*=} ;;
       --epoch_r2v=* ) EPOCH_R2V=${var#*=} ;;
       --debug       ) DEBUG="--debug"     ;;
+      --use_seqs=*  ) USE_SEQS=${var#*=} ;;
     esac
   done
   # Check variables
@@ -408,15 +412,15 @@ function RUN_YK_EXP() {
   printf "Epoch R2V : $EPOCH_R2V\n"
 
   # Shared arguments
-  local SHARED="--data_src=${DATA_SRC} --data_dir=$DATA_DIR --net_dir=$NET_DIR --speaker=$SPEAKER ${DEBUG}"
+  local SHARED="--data_src=${DATA_SRC} --data_dir=$DATA_DIR --net_dir=$NET_DIR --speaker=$SPEAKER --use_seqs=$USE_SEQS ${DEBUG}"
 
   # * Step 1: Prepare data into $DATA_DIR. Reconstructed results saved in $DATA_DIR/../reconstructed
   DRAW_DIVIDER; PrepareData $SHARED
 
-  # * Step 2: Train Audio to Expression Network
+  # * Step 2: Fintune Audio to Expression Network
   DRAW_DIVIDER; TrainA2E $SHARED --epoch=$EPOCH_A2E
 
-  # * Step 3: (Optional) Train neural renderer
+  # * Step 3: (Optional) Finetune neural renderer
   if [ -n "${EPOCH_R2V}" ]; then
     # * The dataset is genrated from $DATA_DIR/../reconstructed and write int $DATA_DIR/../r2v_dataset
     DRAW_DIVIDER; TrainR2V ${SHARED} --epoch=$EPOCH_R2V
