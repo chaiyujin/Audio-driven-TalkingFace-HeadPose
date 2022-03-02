@@ -83,7 +83,7 @@ def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=Fal
                 if re.match(r"trn-000-fps25\.mp4", fpath) is not None:
                     tasks.append(os.path.join(cur_root, fpath))
             else:
-                if re.match(r"tst-000-fps25\.mp4", fpath) is not None:
+                if re.match(r"vld-000-fps25\.mp4", fpath) is not None:
                     tasks.append(os.path.join(cur_root, fpath))
             # if training:
             #     if re.match(r"trn-\d+\.mp4", fpath) is not None:
