@@ -280,6 +280,12 @@ function TestClip() {
   && \
   cd $CWD
 
+  # generate 3d with predicted coefficients
+  # RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
+  cd $CWD/Deep3DFaceReconstruction && \
+    python3 yk_gen3d.py ${AUDIO_PATH} ${RES_DIR} ${TGT_DIR} ${RES_DIR}/../../.. && \
+  cd $CWD
+
   # reenact with predicted coefficients
   cd $CWD/Deep3DFaceReconstruction && \
     RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
@@ -436,7 +442,7 @@ function RUN_YK_EXP() {
     TestClip \
       --src_audio_dir="$d" \
       --tgt_video_dir="$d" \
-      --result_dir="$RES_DIR/self-reenact/$clip_id" \
+      --result_dir="$RES_DIR/$clip_id" \
       --net_dir="$NET_DIR" \
       --epoch_a2e="$EPOCH_A2E" \
       --epoch_r2v="$EPOCH_R2V" \
