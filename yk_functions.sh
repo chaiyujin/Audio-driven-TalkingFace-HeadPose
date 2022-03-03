@@ -283,7 +283,7 @@ function TestClip() {
   # generate 3d with predicted coefficients
   # RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
   cd $CWD/Deep3DFaceReconstruction && \
-    python3 yk_gen3d.py ${AUDIO_PATH} ${RES_DIR} ${TGT_DIR} ${RES_DIR}/../../.. && \
+    python3 yk_gen3d.py ${AUDIO_PATH} ${RES_DIR} ${TGT_DIR} ${RES_DIR}/../.. && \
   cd $CWD
 
   # reenact with predicted coefficients
