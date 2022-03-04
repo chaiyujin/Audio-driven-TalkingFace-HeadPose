@@ -15,7 +15,7 @@ Models/
 **/model/
 **/datasets/
 **/results/
-yk_exp/
+yk_exp*/
 Data/
 Deep3DFaceReconstruction/output/
 Audio/sample/

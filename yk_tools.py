@@ -62,7 +62,7 @@ def prepare_vocaset(output_root, data_root, training, dest_size=256, debug=False
         # data source
         prefix = os.path.join(data_root, f"sentence{i_seq+1:02d}")
         vpath = prefix + ".mp4"
-        lpath = prefix + "-lmks-ibug-68.toml"
+        lpath = prefix + "-lmks-ibug68.toml"
 
         out_dir = os.path.join(output_root, f"clip-sentence{i_seq+1:02d}")
         _preprocess_video(out_dir, vpath, lpath, dest_size, debug)
@@ -92,7 +92,7 @@ def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=Fal
 
     for vpath in tqdm(tasks, desc=f"[prepare_celebtalk]: {os.path.basename(data_root)}"):
         # data source
-        lpath = os.path.splitext(vpath)[0] + "-lmks-ibug-68.toml"
+        lpath = os.path.splitext(vpath)[0] + "-lmks-ibug68.toml"
         assert os.path.exists(lpath)
         # output dir
         seq_id = os.path.basename(os.path.splitext(vpath)[0]).replace("-fps25", "")
@@ -289,7 +289,7 @@ if __name__ == "__main__":
         prepare_vocaset(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=True)
         prepare_vocaset(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=False)
     elif args.mode == "prepare_celebtalk":
-        spk_dir = os.path.join(args.celebtalk_dir, "ProcessTasks", args.speaker, "clips_cropped")
+        spk_dir = os.path.join(args.celebtalk_dir, "Processed", args.speaker, "clips_cropped")
         use_seqs = args.use_seqs
         prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, use_seqs=use_seqs, training=True)
         prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, use_seqs=use_seqs, training=False)
