@@ -90,10 +90,10 @@ def demo(apath, src_dir, tgt_dir, spk_dir):
 
         face_shape_r, face_norm_r, face_color, tri = Reconstruction_for_render(coef, facemodel)
         verts = face_shape_r[0].astype(np.float32) * 0.15
-        im = mesh_viewer.render_verts(verts)
+        im = mesh_viewer.render_verts(verts)[:, :, [2, 1, 0]]
         writer.write(im)
-        cv2.imshow('img', im)
-        cv2.waitKey(40)
+        # cv2.imshow('img', im)
+        # cv2.waitKey(40)
 
     writer.release()
 
