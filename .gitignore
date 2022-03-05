@@ -22,6 +22,7 @@ Audio/sample/
 Audio/dataset/mfcc/
 tmp.sh
 .nohup*
+.snaps/
 
 # expection
 !render-to-video/data
