@@ -33,15 +33,15 @@ def load_graph(graph_filename):
     return graph_def
 
 
-def demo(apath, src_dir, tgt_dir, spk_dir):
+def demo(apath, src_dir, spk_dir, dump_meshes):
 
     def _iframe(x):
         return int(os.path.basename(os.path.splitext(x)[0]).replace("frame", ""))
 
     src_dir = os.path.abspath(src_dir)
-    tgt_dir = os.path.abspath(tgt_dir)
     spk_dir = os.path.abspath(spk_dir)
 
+    # load identity
     recons_dir = os.path.join(spk_dir, "reconstructed", "train")
     files = glob(os.path.join(recons_dir, "**/frame*.mat"), recursive=True)
     all_ids = []
@@ -71,8 +71,13 @@ def demo(apath, src_dir, tgt_dir, spk_dir):
     # build reconstruction model
     # with tf.Graph().as_default() as graph,tf.device('/cpu:0'):
 
-    writer = VideoWriter(os.path.join(src_dir, "render.mp4"), fps=25, src_audio_path=apath, high_quality=True)
+    meshes_dir = os.path.join(src, "meshes")
+    if dump_meshes:
+        os.makedirs(meshes_dir, exist_ok=True)
+    else:
+        meshes_dir = None
 
+    writer = VideoWriter(os.path.join(src_dir, "render.mp4"), fps=25, src_audio_path=apath, high_quality=True)
     for iframe, file in enumerate(tqdm(coeff_list, desc="gen3d")):
         n += 1
         assert iframe == _iframe(file)
@@ -89,8 +94,11 @@ def demo(apath, src_dir, tgt_dir, spk_dir):
         coef[:, 254:257] = 0
 
         face_shape_r, face_norm_r, face_color, tri = Reconstruction_for_render(coef, facemodel)
-        verts = face_shape_r[0].astype(np.float32) * 0.15
-        im = mesh_viewer.render_verts(verts)[:, :, [2, 1, 0]]
+        verts = face_shape_r[0].astype(np.float32)
+        if meshes_dir is not None:
+            verts_npy = os.path.join(meshes_dir, f"{iframe:06d}.npy")
+            np.save(verts_npy, verts)
+        im = mesh_viewer.render_verts(verts * 0.15)[:, :, [2, 1, 0]]
         writer.write(im)
         # cv2.imshow('img', im)
         # cv2.waitKey(40)
@@ -99,4 +107,12 @@ def demo(apath, src_dir, tgt_dir, spk_dir):
 
 
 if __name__ == "__main__":
-    demo(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--apath", type=str)
+    parser.add_argument("--src_dir", type=str)
+    parser.add_argument("--spk_dir", type=str)
+    parser.add_argument("--dump_meshes", action="store_true")
+    args = parser.parse_args()
+
+    demo(args.apath, args.src_dir, args.spk_dir, args.dump_meshes)

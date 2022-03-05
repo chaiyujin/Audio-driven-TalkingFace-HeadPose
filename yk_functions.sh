@@ -247,6 +247,7 @@ function TestClip() {
   local NET_DIR=
   local EPOCH_A2E=
   local EPOCH_R2V=
+  local DUMP_MESHES=
   local DEBUG=
   # Override from arguments
   for var in "$@"; do
@@ -257,6 +258,7 @@ function TestClip() {
       --net_dir=*       ) NET_DIR=${var#*=}   ;;
       --epoch_a2e=*     ) EPOCH_A2E=${var#*=} ;;
       --epoch_r2v=*     ) EPOCH_R2V=${var#*=} ;;
+      --dump_meshes     ) DUMP_MESHES="--dump_meshes"  ;;
       --debug           ) DEBUG="--debug"  ;;
     esac
   done
@@ -281,8 +283,8 @@ function TestClip() {
   cd $CWD
 
   # generate 3d with predicted coefficients
-  # RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
   cd $CWD/Deep3DFaceReconstruction && \
+    RUN_WITH_LOCK_GUARD --tag="gen3d" --lock_file="${RES_DIR}/done_gen3d.lock" -- \
     python3 yk_gen3d.py ${AUDIO_PATH} ${RES_DIR} ${TGT_DIR} ${RES_DIR}/../.. && \
   cd $CWD
 
@@ -380,19 +382,23 @@ function TestClip() {
 function RUN_YK_EXP() {
   local DATA_SRC=
   local SPEAKER=
+  local USE_SEQS=
   local EPOCH_A2E=
   local EPOCH_R2V=
   local DEBUG=""
-  local USE_SEQS=""
+  local TEST=""
+  local DUMP_MESHES=""
   # Override from arguments
   for var in "$@"; do
     case $var in
       --data_src=*  ) DATA_SRC=${var#*=}  ;;
       --speaker=*   ) SPEAKER=${var#*=}   ;;
+      --use_seqs=*  ) USE_SEQS=${var#*=}  ;;
       --epoch_a2e=* ) EPOCH_A2E=${var#*=} ;;
       --epoch_r2v=* ) EPOCH_R2V=${var#*=} ;;
+      --test        ) TEST="true"         ;;
+      --dump_meshes ) DUMP_MESHES="--dump_meshes" ;;
       --debug       ) DEBUG="--debug"     ;;
-      --use_seqs=*  ) USE_SEQS=${var#*=} ;;
     esac
   done
   # Check variables
@@ -433,19 +439,21 @@ function RUN_YK_EXP() {
   fi
 
   # * Step testing
-  DRAW_DIVIDER;
+  if [ -n "${TEST}" ]; then
+    DRAW_DIVIDER;
 
-  for d in "$DATA_DIR/test"/*; do
-    if [ ! -d "$d" ]; then continue; fi
-    local clip_id="$(basename $d)"
-
-    TestClip \
-      --src_audio_dir="$d" \
-      --tgt_video_dir="$d" \
-      --result_dir="$RES_DIR/$clip_id" \
-      --net_dir="$NET_DIR" \
-      --epoch_a2e="$EPOCH_A2E" \
-      --epoch_r2v="$EPOCH_R2V" \
-    ;
-  done
+    for d in "$DATA_DIR/test"/*; do
+      if [ ! -d "$d" ]; then continue; fi
+      local clip_id="$(basename $d)"
+      TestClip \
+        --src_audio_dir="$d" \
+        --tgt_video_dir="$d" \
+        --result_dir="$RES_DIR/$clip_id" \
+        --net_dir="$NET_DIR" \
+        --epoch_a2e="$EPOCH_A2E" \
+        --epoch_r2v="$EPOCH_R2V" \
+        ${DUMP_MESHES} \
+      ;
+    done
+  fi
 }
