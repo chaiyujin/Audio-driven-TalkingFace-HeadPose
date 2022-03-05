@@ -86,6 +86,7 @@ def test():
     state_dict = multi2single(config.model_name, 0)
     generator.load_state_dict(state_dict)
     # print("load pretrained [{}]".format(config.model_name))
+    # quit(1)
 
     if config.cuda:
         generator = generator.cuda()

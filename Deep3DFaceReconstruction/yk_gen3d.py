@@ -63,15 +63,12 @@ def demo(apath, src_dir, spk_dir, dump_meshes):
 
     # read face model
     facemodel = BFM()
-    # read standard landmarks for preprocessing images
-    lm3D = load_lm3d()
     n = 0
-    t1 = time.time()
 
     # build reconstruction model
     # with tf.Graph().as_default() as graph,tf.device('/cpu:0'):
 
-    meshes_dir = os.path.join(src, "meshes")
+    meshes_dir = os.path.join(src_dir, "meshes")
     if dump_meshes:
         os.makedirs(meshes_dir, exist_ok=True)
     else:

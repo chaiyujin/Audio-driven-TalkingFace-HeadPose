@@ -11,6 +11,25 @@ CWD=${PWD}
 # *                                                  Tool Functions                                                  * #
 # * ---------------------------------------------------------------------------------------------------------------- * #
 
+function LoadMediaList() {
+  local filepath=$1;
+  shift 1;
+
+  input=$filepath
+  while IFS= read -r line
+  do
+    # trim
+    line=$(echo $line | xargs)
+    # valid
+    if [ -n "$line" ] && [ "${line:0:1}" != "#" ]; then
+      if [ "${line:0:1}" != "/" ]; then
+        line=$(dirname $filepath)/${line}
+      fi
+      echo "$line"
+    fi
+  done < "$input"
+}
+
 function DRAW_DIVIDER() {
   printf '%*s\n' "${COLUMNS:-$(tput cols)}" ' ' | tr ' ' '-'
 }
@@ -242,6 +261,7 @@ function TrainR2V() {
 
 function TestClip() {
   local SRC_DIR=
+  local AUDIO_PATH=
   local TGT_DIR=
   local RES_DIR=
   local NET_DIR=
@@ -252,6 +272,7 @@ function TestClip() {
   # Override from arguments
   for var in "$@"; do
     case $var in
+      --audio_path=*    ) AUDIO_PATH=${var#*=};;
       --src_audio_dir=* ) SRC_DIR=${var#*=}   ;;
       --tgt_video_dir=* ) TGT_DIR=${var#*=}   ;;
       --result_dir=*    ) RES_DIR=${var#*=}   ;;
@@ -263,29 +284,46 @@ function TestClip() {
     esac
   done
   # check
-  [ -n "$SRC_DIR"   ] || { echo "src_audio_dir is not set!"; exit 1; }
+  if [ -z "$SRC_DIR" ] && [ -z "$AUDIO_PATH" ] ; then 
+    echo "src_audio_dir is not set!";
+    exit 1;
+  fi
   [ -n "$TGT_DIR"   ] || { echo "tgt_video_dir is not set!"; exit 1; }
   [ -n "$RES_DIR"   ] || { echo "result_dir is not set!";    exit 1; }
   [ -n "$EPOCH_A2E" ] || { echo "epoch_a2e is not set!";     exit 1; }
 
-  local CKPT_A2C="${NET_DIR}/atcnet/atcnet_lstm_${EPOCH_A2E}.pth"
-  local AUDIO_PATH="$SRC_DIR/audio/audio.wav"
+  if [ -z "$AUDIO_PATH" ]; then
+    AUDIO_PATH="$SRC_DIR/audio/audio.wav"
+  fi
 
-  printf "Running test for '${SRC_DIR}', reenacting video '${TGT_DIR}'\n"
+  # Make sure it's audio file and save it into res dir
+  mkdir -p $RES_DIR;
+  local TMP_APATH="$RES_DIR/audio.wav"
+  ffmpeg -loglevel error -i "${AUDIO_PATH}" -ac 1 -ar 16000 $TMP_APATH -y;
+  AUDIO_PATH=$TMP_APATH;
+
+  local CKPT_A2C="${NET_DIR}/atcnet/atcnet_lstm_${EPOCH_A2E}.pth"
+
+  printf "Running test for '${AUDIO_PATH}', reenacting video '${TGT_DIR}'\n"
 
   # predict coefficients from audio
   cd $CWD/Audio/code && \
   python3 yk_atcnet_test.py --pose 1 --relativeframe 0 --dataset multi_clips --device_ids 0 \
-    --model_name ${CKPT_A2C} \
-    --in_file    ${AUDIO_PATH} \
-    --sample_dir ${RES_DIR}/coeff_pred \
+    --model_name "${CKPT_A2C}" \
+    --in_file    "${AUDIO_PATH}" \
+    --sample_dir "${RES_DIR}/coeff_pred" \
   && \
   cd $CWD
 
   # generate 3d with predicted coefficients
   cd $CWD/Deep3DFaceReconstruction && \
     RUN_WITH_LOCK_GUARD --tag="gen3d" --lock_file="${RES_DIR}/done_gen3d.lock" -- \
-    python3 yk_gen3d.py ${AUDIO_PATH} ${RES_DIR} ${TGT_DIR} ${RES_DIR}/../.. && \
+    python3 yk_gen3d.py \
+      --apath ${AUDIO_PATH} \
+      --src_dir ${RES_DIR} \
+      --spk_dir ${RES_DIR}/../.. \
+      ${DUMP_MESHES} \
+    && \
   cd $CWD
 
   # reenact with predicted coefficients
@@ -387,6 +425,7 @@ function RUN_YK_EXP() {
   local EPOCH_R2V=
   local DEBUG=""
   local TEST=""
+  local MEDIA_LIST=""
   local DUMP_MESHES=""
   # Override from arguments
   for var in "$@"; do
@@ -397,6 +436,7 @@ function RUN_YK_EXP() {
       --epoch_a2e=* ) EPOCH_A2E=${var#*=} ;;
       --epoch_r2v=* ) EPOCH_R2V=${var#*=} ;;
       --test        ) TEST="true"         ;;
+      --media_list=*) MEDIA_LIST=${var#*=};;
       --dump_meshes ) DUMP_MESHES="--dump_meshes" ;;
       --debug       ) DEBUG="--debug"     ;;
     esac
@@ -442,18 +482,37 @@ function RUN_YK_EXP() {
   if [ -n "${TEST}" ]; then
     DRAW_DIVIDER;
 
-    for d in "$DATA_DIR/test"/*; do
-      if [ ! -d "$d" ]; then continue; fi
-      local clip_id="$(basename $d)"
-      TestClip \
-        --src_audio_dir="$d" \
-        --tgt_video_dir="$d" \
-        --result_dir="$RES_DIR/$clip_id" \
-        --net_dir="$NET_DIR" \
-        --epoch_a2e="$EPOCH_A2E" \
-        --epoch_r2v="$EPOCH_R2V" \
-        ${DUMP_MESHES} \
-      ;
-    done
+    local d="$DATA_DIR/train/clip-trn-000"
+    # for d in "$DATA_DIR/test"/*; do
+    #   if [ ! -d "$d" ]; then continue; fi
+    #   local clip_id="$(basename $d)"
+    #   TestClip \
+    #     --src_audio_dir="$d" \
+    #     --tgt_video_dir="$d" \
+    #     --result_dir="$RES_DIR/$clip_id" \
+    #     --net_dir="$NET_DIR" \
+    #     --epoch_a2e="$EPOCH_A2E" \
+    #     --epoch_r2v="$EPOCH_R2V" \
+    #     ${DUMP_MESHES} \
+    #   ;
+    # done
+
+    # generate videos for thing list in media_list file
+    if [ -n "${MEDIA_LIST}" ]; then
+      local media_list=$(LoadMediaList ${MEDIA_LIST});
+      for media_path in $media_list; do
+        local clip_id="$(basename $media_path)"
+        clip_id="${clip_id%.*}"
+        TestClip \
+          --audio_path="$media_path" \
+          --tgt_video_dir="$d" \
+          --result_dir="$RES_DIR/$clip_id" \
+          --net_dir="$NET_DIR" \
+          --epoch_a2e="$EPOCH_A2E" \
+          --epoch_r2v="$EPOCH_R2V" \
+          ${DUMP_MESHES} \
+        ;
+      done
+    fi
   fi
 }
