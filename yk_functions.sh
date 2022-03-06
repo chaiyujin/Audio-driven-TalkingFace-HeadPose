@@ -332,7 +332,7 @@ function TestClip() {
     python3 yk_reenact.py ${RES_DIR} ${TGT_DIR} && \
   cd $CWD
 
-  local vpath_render="$RES_DIR-render.mp4"
+  local vpath_render="$RES_DIR/reenact-render.mp4"
   if [ ! -f "$vpath_render" ]; then
     mkdir -p "$(dirname $vpath_render)"
     ffmpeg -y -loglevel error \
@@ -482,20 +482,21 @@ function RUN_YK_EXP() {
   if [ -n "${TEST}" ]; then
     DRAW_DIVIDER;
 
-    local d="$DATA_DIR/train/clip-trn-000"
-    # for d in "$DATA_DIR/test"/*; do
-    #   if [ ! -d "$d" ]; then continue; fi
-    #   local clip_id="$(basename $d)"
-    #   TestClip \
-    #     --src_audio_dir="$d" \
-    #     --tgt_video_dir="$d" \
-    #     --result_dir="$RES_DIR/$clip_id" \
-    #     --net_dir="$NET_DIR" \
-    #     --epoch_a2e="$EPOCH_A2E" \
-    #     --epoch_r2v="$EPOCH_R2V" \
-    #     ${DUMP_MESHES} \
-    #   ;
-    # done
+    local tgt_dir="$DATA_DIR/train/clip-trn-000"
+
+    for d in "$DATA_DIR/test"/*; do
+      if [ ! -d "$d" ]; then continue; fi
+      local clip_id="$(basename $d)"
+      TestClip \
+        --src_audio_dir="$d" \
+        --tgt_video_dir="$tgt_dir" \
+        --result_dir="$RES_DIR/$clip_id" \
+        --net_dir="$NET_DIR" \
+        --epoch_a2e="$EPOCH_A2E" \
+        --epoch_r2v="$EPOCH_R2V" \
+        ${DUMP_MESHES} \
+      ;
+    done
 
     # generate videos for thing list in media_list file
     if [ -n "${MEDIA_LIST}" ]; then
@@ -505,7 +506,7 @@ function RUN_YK_EXP() {
         clip_id="${clip_id%.*}"
         TestClip \
           --audio_path="$media_path" \
-          --tgt_video_dir="$d" \
+          --tgt_video_dir="$tgt_dir" \
           --result_dir="$RES_DIR/$clip_id" \
           --net_dir="$NET_DIR" \
           --epoch_a2e="$EPOCH_A2E" \

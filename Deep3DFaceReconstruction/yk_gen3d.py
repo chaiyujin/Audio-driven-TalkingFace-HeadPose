@@ -42,13 +42,18 @@ def demo(apath, src_dir, spk_dir, dump_meshes):
     spk_dir = os.path.abspath(spk_dir)
 
     # load identity
-    recons_dir = os.path.join(spk_dir, "reconstructed", "train")
-    files = glob(os.path.join(recons_dir, "**/frame*.mat"), recursive=True)
-    all_ids = []
-    for mat_path in files:
-        iden = loadmat(mat_path)["coeff"][0]
-        all_ids.append(iden)
-    iden = np.asarray(all_ids).mean(0, keepdims=True).astype(np.float32)
+    npy_iden = os.path.join(spk_dir, "results", "iden.npy")
+    if not os.path.exists(npy_iden):
+        recons_dir = os.path.join(spk_dir, "reconstructed", "train")
+        files = glob(os.path.join(recons_dir, "**/frame*.mat"), recursive=True)
+        all_ids = []
+        for mat_path in files:
+            iden = loadmat(mat_path)["coeff"][0]
+            all_ids.append(iden)
+        iden = np.asarray(all_ids).mean(0, keepdims=True).astype(np.float32)
+        os.makedirs(os.path.dirname(npy_iden), exist_ok=True)
+        np.save(npy_iden, iden)
+    iden = np.load(npy_iden)
 
     # input and output folder
     coeff_list = glob(os.path.join(src_dir, "coeff_pred/*.npy"))
