@@ -326,23 +326,22 @@ function TestClip() {
     && \
   cd $CWD
 
-  # reenact with predicted coefficients
-  cd $CWD/Deep3DFaceReconstruction && \
-    RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
-    python3 yk_reenact.py ${RES_DIR} ${TGT_DIR} && \
-  cd $CWD
-
-  local vpath_render="$RES_DIR/reenact-render.mp4"
-  if [ ! -f "$vpath_render" ]; then
-    mkdir -p "$(dirname $vpath_render)"
-    ffmpeg -y -loglevel error \
-      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d.png \
-      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d_render.png \
-      -thread_queue_size 8192 -i $AUDIO_PATH \
-      -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
-      $vpath_render \
-    ;
-  fi
+  # # reenact with predicted coefficients
+  # cd $CWD/Deep3DFaceReconstruction && \
+  #   RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
+  #   python3 yk_reenact.py ${RES_DIR} ${TGT_DIR} && \
+  # cd $CWD
+  # local vpath_render="$RES_DIR/reenact-render.mp4"
+  # if [ ! -f "$vpath_render" ]; then
+  #   mkdir -p "$(dirname $vpath_render)"
+  #   ffmpeg -y -loglevel error \
+  #     -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d.png \
+  #     -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d_render.png \
+  #     -thread_queue_size 8192 -i $AUDIO_PATH \
+  #     -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
+  #     $vpath_render \
+  #   ;
+  # fi
 
   # * Return if don't have R2V
   if [ -z "${EPOCH_R2V}" ]; then
@@ -482,14 +481,12 @@ function RUN_YK_EXP() {
   if [ -n "${TEST}" ]; then
     DRAW_DIVIDER;
 
-    local tgt_dir="$DATA_DIR/train/clip-trn-000"
-
-    for d in "$DATA_DIR/test"/*; do
+    for d in "$DATA_DIR/train"/*; do
       if [ ! -d "$d" ]; then continue; fi
       local clip_id="$(basename $d)"
       TestClip \
         --src_audio_dir="$d" \
-        --tgt_video_dir="$tgt_dir" \
+        --tgt_video_dir="$d" \
         --result_dir="$RES_DIR/$clip_id" \
         --net_dir="$NET_DIR" \
         --epoch_a2e="$EPOCH_A2E" \
@@ -498,6 +495,21 @@ function RUN_YK_EXP() {
       ;
     done
 
+    for d in "$DATA_DIR/test"/*; do
+      if [ ! -d "$d" ]; then continue; fi
+      local clip_id="$(basename $d)"
+      TestClip \
+        --src_audio_dir="$d" \
+        --tgt_video_dir="$d" \
+        --result_dir="$RES_DIR/$clip_id" \
+        --net_dir="$NET_DIR" \
+        --epoch_a2e="$EPOCH_A2E" \
+        --epoch_r2v="$EPOCH_R2V" \
+        ${DUMP_MESHES} \
+      ;
+    done
+
+    local tgt_dir="$DATA_DIR/train/clip-trn-000"
     # generate videos for thing list in media_list file
     if [ -n "${MEDIA_LIST}" ]; then
       local media_list=$(LoadMediaList ${MEDIA_LIST});
