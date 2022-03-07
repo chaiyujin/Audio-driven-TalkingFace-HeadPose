@@ -3,91 +3,11 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
+source yk_lib.sh
+
 # * Global variables
 ERROR='\033[0;31m[ERROR]\033[0m'
 CWD=${PWD}
-
-# * ---------------------------------------------------------------------------------------------------------------- * #
-# *                                                  Tool Functions                                                  * #
-# * ---------------------------------------------------------------------------------------------------------------- * #
-
-function LoadMediaList() {
-  local filepath=$1;
-  shift 1;
-
-  input=$filepath
-  while IFS= read -r line
-  do
-    # trim
-    line=$(echo $line | xargs)
-    # valid
-    if [ -n "$line" ] && [ "${line:0:1}" != "#" ]; then
-      if [ "${line:0:1}" != "/" ]; then
-        line=$(dirname $filepath)/${line}
-      fi
-      echo "$line"
-    fi
-  done < "$input"
-}
-
-function DRAW_DIVIDER() {
-  printf '%*s\n' "${COLUMNS:-$(tput cols)}" ' ' | tr ' ' '-'
-}
-
-function RUN_WITH_LOCK_GUARD() {
-  local _end=
-  local lock_file=
-  local tag=
-  local debug=
-  local cmd=
-  for i in "$@"; do
-    if [ -z "${_end}" ]; then
-      if [ "$i" = "--" ]; then
-        _end=true
-        continue
-      fi
-      case $i in
-        -l=* | --lock_file=* ) lock_file=${i#*=}  ;;
-        -t=* | --tag=*       ) tag=${i#*=}        ;;
-        -d   | --debug       ) debug=true         ;;
-        *) echo "[LockFileGuard]: Wrong argument ${i}"; exit 1;;
-      esac
-    else
-      cmd="$cmd '$i'"
-    fi
-  done
-
-  # lock_file must be given
-  if [ -z "$lock_file" ]; then
-    printf "lock_file is not set!\n"
-    exit 1
-  fi
-
-  if [ -f "$lock_file" ]; then
-    printf "Command '${tag}' is skipped due to existance of lock_file ${lock_file}\n"
-    return
-  fi
-
-  # to abspath
-  mkdir -p "$(dirname $lock_file)"
-  lock_file="$(cd $(dirname $lock_file) && pwd)/$(basename $lock_file)"
-
-  # debug message
-  if [ -n "$debug" ]; then
-    echo "--------------------------------------------------------------------------------"
-    echo "LOCK_FILE: $lock_file"
-    echo "COMMAND:   $cmd"
-    echo "--------------------------------------------------------------------------------"
-  fi
-
-  # Run command in subshell and creat lock file if success
-  if (eval "$cmd") ; then
-    [ -f "$lock_file" ] || touch "$lock_file"
-  else
-    echo "Failed to run command '${tag}'"
-    exit 1
-  fi
-}
 
 # * ---------------------------------------------------------------------------------------------------------------- * #
 # *                                              Functions for Each Step                                             * #
@@ -513,13 +433,14 @@ function RUN_YK_EXP() {
     # generate videos for thing list in media_list file
     if [ -n "${MEDIA_LIST}" ]; then
       local media_list=$(LoadMediaList ${MEDIA_LIST});
-      for media_path in $media_list; do
-        local clip_id="$(basename $media_path)"
-        clip_id="${clip_id%.*}"
+      for media_info in $media_list; do
+        IFS='|' read -ra ADDR <<< "$media_info"
+        local fpath="${ADDR[0]}"
+        local seq_id="${ADDR[1]}"
         TestClip \
-          --audio_path="$media_path" \
+          --audio_path="$fpath" \
           --tgt_video_dir="$tgt_dir" \
-          --result_dir="$RES_DIR/$clip_id" \
+          --result_dir="$RES_DIR/$seq_id" \
           --net_dir="$NET_DIR" \
           --epoch_a2e="$EPOCH_A2E" \
           --epoch_r2v="$EPOCH_R2V" \
