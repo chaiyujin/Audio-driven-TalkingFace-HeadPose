@@ -180,6 +180,7 @@ function TrainR2V() {
 # * --------------------------------------------------- Run test --------------------------------------------------- * #
 
 function TestClip() {
+  local EXP_DIR=
   local SRC_DIR=
   local AUDIO_PATH=
   local TGT_DIR=
@@ -197,6 +198,7 @@ function TestClip() {
       --tgt_video_dir=* ) TGT_DIR=${var#*=}   ;;
       --result_dir=*    ) RES_DIR=${var#*=}   ;;
       --net_dir=*       ) NET_DIR=${var#*=}   ;;
+      --exp_dir=*       ) EXP_DIR=${var#*=}   ;;
       --epoch_a2e=*     ) EPOCH_A2E=${var#*=} ;;
       --epoch_r2v=*     ) EPOCH_R2V=${var#*=} ;;
       --dump_meshes     ) DUMP_MESHES="--dump_meshes"  ;;
@@ -241,7 +243,7 @@ function TestClip() {
     python3 yk_gen3d.py \
       --apath ${AUDIO_PATH} \
       --src_dir ${RES_DIR} \
-      --spk_dir ${RES_DIR}/../.. \
+      --spk_dir ${EXP_DIR} \
       ${DUMP_MESHES} \
     && \
   cd $CWD
@@ -409,6 +411,7 @@ function RUN_YK_EXP() {
         --tgt_video_dir="$d" \
         --result_dir="$RES_DIR/$clip_id" \
         --net_dir="$NET_DIR" \
+        --exp_dir=$EXP_DIR \
         --epoch_a2e="$EPOCH_A2E" \
         --epoch_r2v="$EPOCH_R2V" \
         ${DUMP_MESHES} \
@@ -423,6 +426,7 @@ function RUN_YK_EXP() {
         --tgt_video_dir="$d" \
         --result_dir="$RES_DIR/$clip_id" \
         --net_dir="$NET_DIR" \
+        --exp_dir=$EXP_DIR \
         --epoch_a2e="$EPOCH_A2E" \
         --epoch_r2v="$EPOCH_R2V" \
         ${DUMP_MESHES} \
@@ -442,6 +446,7 @@ function RUN_YK_EXP() {
           --tgt_video_dir="$tgt_dir" \
           --result_dir="$RES_DIR/$seq_id" \
           --net_dir="$NET_DIR" \
+          --exp_dir=$EXP_DIR \
           --epoch_a2e="$EPOCH_A2E" \
           --epoch_r2v="$EPOCH_R2V" \
           ${DUMP_MESHES} \
