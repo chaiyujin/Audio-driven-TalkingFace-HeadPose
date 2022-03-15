@@ -49,6 +49,7 @@ function TrainA2E() {
   local NET_DIR=
   local EPOCH=
   local SAVE_GAP_EPOCH=
+  local LR=
   # Override from arguments
   for var in "$@"; do
     case $var in
@@ -56,6 +57,7 @@ function TrainA2E() {
       --net_dir=*   ) NET_DIR=${var#*=}   ;;
       --epoch=*     ) EPOCH=${var#*=}     ;;
       --save_gap_epoch=*) SAVE_GAP_EPOCH=${var#*=} ;;
+      --lr=* ) LR=${var#*=}     ;;
     esac
   done
 
@@ -63,14 +65,14 @@ function TrainA2E() {
   [ -n "$NET_DIR"  ] || { echo "net_dir is not set!";  exit 1; }
   [ -n "$EPOCH"    ] || { echo "epoch is not set!";    exit 1; }
   [ -n "$SAVE_GAP_EPOCH" ] || { echo "save_gap_epoch is not set!";    exit 1; }
+  [ -n "$LR"    ] || { echo "lr is not set!";    exit 1; }
 
   # train
   local CKPT_A2C="${NET_DIR}/atcnet/atcnet_lstm_${EPOCH}.pth"
   cd $CWD/Audio/code && \
     RUN_WITH_LOCK_GUARD --tag="Train_Audio2Expresssion" --lock_file="$CKPT_A2C" -- \
     python3 yk_atcnet_flame.py \
-      --pose 0 --relativeframe 0 \
-      --lr 0.0001 --smooth_loss2 1 \
+      --lr ${LR} --smooth_loss2 1 \
       --dataset multi_clips \
       --max_epochs ${EPOCH} \
       --save_per_epochs ${SAVE_GAP_EPOCH} \
@@ -109,6 +111,7 @@ function TestA2E() {
     --in_file    "${AUDIO_PATH}" \
     --sample_dir "${RES_DIR}/coeff_pred" \
   && \
+  cp ${AUDIO_PATH} ${RES_DIR}/audio.wav && \
   cd $CWD
 }
 
@@ -153,7 +156,7 @@ function RUN_YK_EXP() {
   python3 -m yk_scripts.flame.tools "prepare_vocaset" --data_dir ${VOCA_DATA_DIR} ${DEBUG};
 
   DRAW_DIVIDER;
-  TrainA2E --data_dir=${VOCA_DATA_DIR} --net_dir=${VOCA_NET_DIR} --epoch=50 --save_gap_epoch=10;
+  TrainA2E --data_dir=${VOCA_DATA_DIR} --net_dir=${VOCA_NET_DIR} --epoch=100 --save_gap_epoch=10 --lr=0.0002;
   exit 1;
 
   # other variables
