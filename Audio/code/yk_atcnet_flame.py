@@ -16,7 +16,7 @@ from torch.nn.modules.module import _addindent
 from torch.utils.data import DataLoader
 
 from models import ATC_net
-from yk_dataset_bfm import MultiClips_1D_lstm_3dmm_pose
+from yk_dataset_flame import MultiClips_1D_lstm_3dmm
 
 
 def multi2single(model_path, id):
@@ -93,12 +93,11 @@ class Trainer:
             self.load(config.pretrained_dir, config.pretrained_epoch)
         self.opt_g = torch.optim.Adam(self.generator.parameters(), lr=config.lr, betas=(config.beta1, config.beta2))
         if config.lstm:
-            assert config.pose != 0
+            assert config.pose == 0
             assert config.dataset == "multi_clips"
-            self.dataset = MultiClips_1D_lstm_3dmm_pose(
+            self.dataset = MultiClips_1D_lstm_3dmm(
                 config.dataset_dir,
                 train=config.is_train,
-                indexes=config.indexes,
                 relativeframe=config.relativeframe,
             )
         else:
@@ -143,6 +142,7 @@ class Trainer:
                 loss = self.mse_loss_fn(fake_coeff, coeff)
 
                 if config.less_constrain:
+                    assert self.config.pose == 1
                     loss = self.mse_loss_fn(
                         fake_coeff[:, :, :L], coeff[:, :, :L]
                     ) + config.lambda_pose * self.mse_loss_fn(fake_coeff[:, :, L:], coeff[:, :, L:])
@@ -150,6 +150,7 @@ class Trainer:
                 # put smooth on pose
                 # tidu ermo pingfang
                 if config.smooth_loss:
+                    assert self.config.pose == 1
                     loss1 = loss.clone()
                     frame_dif = fake_coeff[:, 1:, L:] - fake_coeff[:, :-1, L:]  # [16, 15, 6]
                     # norm2 = torch.norm(frame_dif, dim = 1) # default 2-norm, [16, 6]
@@ -264,7 +265,7 @@ def parse_args():
     parser.add_argument("--pretrained_epoch", type=int)
     parser.add_argument("--start_epoch", type=int, default=0, help="start from 0")
     parser.add_argument("--rnn", type=bool, default=True)
-    parser.add_argument("--para_dim", type=int, default=64)
+    parser.add_argument("--para_dim", type=int, default=53)
     parser.add_argument("--index", type=str, default="80,144", help="index ranges")
     parser.add_argument("--pose", type=int, default=0, help="whether predict pose")
     parser.add_argument("--relativeframe", type=int, default=0, help="whether use relative frame value for pose")
