@@ -13,6 +13,7 @@ import python_speech_features
 import toml
 from shutil import copyfile
 from tqdm import tqdm
+from ..meshio import load_mesh
 
 regex = re.compile(r'frame\d+\.png')
 
@@ -66,121 +67,90 @@ def get_mfcc_extend(test_file, save_file):
     return mfcc
 
 
-def prepare_vocaset(output_root, data_root, training, dest_size=256, debug=False):
+def prepare_talk_video(output_root, data_root, data_src, training, dest_size=256, debug=False, use_seqs=()):
     # output root
     output_root = os.path.expanduser(output_root)
     output_root = os.path.join(output_root, "train" if training else "test")
     # source root
     data_root = os.path.expanduser(data_root)
 
-    seq_range = list(range(0, 20)) if training else list(range(20, 40))
-    for i_seq in tqdm(seq_range, desc=f"[prepare_vocaset]: {os.path.basename(data_root)}/{seq_range[0]}-{seq_range[-1]}"):
-        # data source
-        prefix = os.path.join(data_root, f"sentence{i_seq+1:02d}")
-        vpath = prefix + ".mp4"
-        lpath = prefix + "-lmks-ibug68.toml"
+    # copy fitted identity
+    fit_iden_dir = os.path.join(data_root, "fitted", "identity")
+    assert os.path.exists(fit_iden_dir)
+    save_iden_dir = os.path.join(os.path.dirname(output_root), "identity")
+    os.makedirs(save_iden_dir, exist_ok=True)
+    if (
+        not os.path.exists(os.path.join(save_iden_dir, "identity.obj")) or
+        not os.path.exists(os.path.join(fit_iden_dir, "shape.npy"))
+    ):
+        copyfile(os.path.join(fit_iden_dir, "shape.npy"), os.path.join(save_iden_dir, "shape.npy"))
+        copyfile(os.path.join(fit_iden_dir, "identity.obj"), os.path.join(save_iden_dir, "identity.obj"))
+    
+    iden_verts = load_mesh(os.path.join(save_iden_dir, "identity.obj"))[0]
 
-        out_dir = os.path.join(output_root, f"clip-sentence{i_seq+1:02d}")
-        _preprocess_video(out_dir, vpath, lpath, dest_size, debug)
-
-
-def prepare_celebtalk(output_root, data_root, training, dest_size=256, debug=False, use_seqs=()):
-    # output root
-    output_root = os.path.expanduser(output_root)
-    output_root = os.path.join(output_root, "train" if training else "test")
-    # source root
-    data_root = os.path.expanduser(data_root)
+    # find sequences
 
     tasks = []
-    for cur_root, _, files in os.walk(data_root):
-        for fpath in files:
-            seq_id = os.path.splitext(fpath)[0].replace("-fps25", "")
-            if seq_id not in use_seqs:
-                continue
-            if training:
-                if re.match(r"trn-\d+-fps25\.mp4", fpath) is not None:
-                    tasks.append(os.path.join(cur_root, fpath))
+    for cur_root, subdirs, _ in os.walk(data_root):
+        for subdir in subdirs:
+            absdir = os.path.join(cur_root, subdir)
+            if data_src == "celebtalk":
+                if training:
+                    if re.match(r"trn-\d+", subdir) is not None:
+                        tasks.append(absdir)
+                else:
+                    if re.match(r"vld-\d+", subdir) is not None:
+                        tasks.append(absdir)
             else:
-                if re.match(r"vld-\d+-fps25\.mp4", fpath) is not None:
-                    tasks.append(os.path.join(cur_root, fpath))
+                raise NotImplementedError()
         break
-    print(tasks)
+    print(tasks, data_src)
 
-    for vpath in tqdm(tasks, desc=f"[prepare_celebtalk]: {os.path.basename(data_root)}"):
-        # data source
-        lpath = os.path.splitext(vpath)[0] + "-lmks-ibug68.toml"
-        assert os.path.exists(lpath)
+    for src_dir in tqdm(tasks, desc=f"[prepare_talk_video]: {os.path.basename(data_root)}"):
+        with open(os.path.join(src_dir, "info.json")) as fp:
+            info = json.load(fp)
+            fps = info['fps']
         # output dir
-        seq_id = os.path.basename(os.path.splitext(vpath)[0]).replace("-fps25", "")
+        seq_id = os.path.basename(src_dir)
+        fit_dir = os.path.join(data_root, "fitted", seq_id)
         out_dir = os.path.join(output_root, f"clip-{seq_id}")
-        # preprocess
-        _preprocess_video(out_dir, vpath, lpath, dest_size, debug)
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir, exist_ok=True)
+        # audio
+        if not os.path.exists(os.path.join(out_dir, "audio/audio.wav")):
+            os.makedirs(os.path.join(out_dir, "audio"), exist_ok=True)
+            copyfile(os.path.join(src_dir, "audio.wav"), os.path.join(out_dir, "audio/audio.wav"))
+        # audio feature
+        if not os.path.exists(os.path.join(out_dir, "audio/mfcc.npy")):
+            get_mfcc_extend(os.path.join(out_dir, "audio/audio.wav"), os.path.join(out_dir, "audio/mfcc.npy"))
+        # coeffs
+        if not os.path.exists(os.path.join(out_dir, "coeffs.npy")):
+            coeffs = []
+            fpaths = sorted(glob(os.path.join(fit_dir, "frames", "*.npz")))
+            for i, fpath in enumerate(fpaths):
+                assert i == int(os.path.basename(os.path.splitext(fpath)[0]))
+                dat = np.load(fpath)
+                jaw = dat['jaw']
+                exp = dat['exp']
+                coeff = np.concatenate((jaw, exp))
+                assert len(coeff) == 53
+                coeffs.append(coeff)
+            coeffs = interpolate_features(np.asarray(coeffs), fps, output_rate=25.0).astype(np.float32)
+            np.save(os.path.join(out_dir, "coeffs.npy"), coeffs)
+        # offsets
+        if not os.path.exists(os.path.join(out_dir, "offsets.npy")):
+            offsets = []
+            fpaths = sorted(glob(os.path.join(fit_dir, "meshes", "*.npy")))
+            for i, fpath in enumerate(fpaths):
+                assert i == int(os.path.basename(os.path.splitext(fpath)[0]))
+                verts = np.load(fpath)
+                offsets.append(verts - iden_verts)  # remove identity
+            offsets = np.asarray(offsets)
+            offsets = np.reshape(offsets, (len(offsets), -1))
+            offsets = interpolate_features(offsets, fps, output_rate=25.0)
+            offsets = np.reshape(offsets, (len(offsets), -1, 3)).astype(np.float32)
+            np.save(os.path.join(out_dir, "offsets.npy"), offsets)
 
-
-def _preprocess_video(out_dir, vpath, lpath, dest_size, debug):
-    done_flag = os.path.join(out_dir, "done.flag")
-    if os.path.exists(done_flag):
-        return
-
-    # prepare output dirs
-    os.makedirs(os.path.join(out_dir, "full"), exist_ok=True)
-    os.makedirs(os.path.join(out_dir, "crop"), exist_ok=True)
-    os.makedirs(os.path.join(out_dir, "audio"), exist_ok=True)
-
-    # 1. -> 25 fps images and audio
-    # assert os.system(f"ffmpeg -loglevel error -hide_banner -y -i {vpath} -r 25 {out_dir}/full/%05d.png") == 0
-    assert os.system(f"ffmpeg -loglevel error -hide_banner -y -i {vpath} {out_dir}/full/%05d.png") == 0
-    assert os.system(f"ffmpeg -loglevel error -hide_banner -y -i {vpath} {out_dir}/audio/audio.wav") == 0
-    
-    # 2. dump audio feature
-    get_mfcc_extend(f"{out_dir}/audio/audio.wav", f"{out_dir}/audio/mfcc.npy")
-
-    # 3. resize and dump landmarks
-    with open(lpath) as fp:
-        lmks_data = toml.load(fp)
-
-    img_list = sorted(glob(f"{out_dir}/full/*.png"))
-    for i_frm, img_path in enumerate(img_list):
-        save_prefix = f"{out_dir}/crop/frame{i_frm}"
-        img = cv2.imread(img_path)
-        # fetch lmk
-        pts = np.asarray(lmks_data['frames'][i_frm]['points'], dtype=np.float32)
-
-        # resize
-        pts[:, 0] = pts[:, 0] / img.shape[1] * dest_size
-        pts[:, 1] = pts[:, 1] / img.shape[0] * dest_size
-        img = cv2.resize(img, (dest_size, dest_size))
-
-        # save
-        eyel = np.round(np.mean(pts[36:42,:],axis=0)).astype("int")
-        eyer = np.round(np.mean(pts[42:48,:],axis=0)).astype("int")
-        nose = pts[33].astype("int")
-        mouthl = pts[48].astype("int")
-        mouthr = pts[54].astype("int")
-        message = '%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n' % (
-            eyel[0], eyel[1],
-            eyer[0], eyer[1],
-            nose[0], nose[1],
-            mouthl[0], mouthl[1],
-            mouthr[0], mouthr[1]
-        )
-        with open(save_prefix + ".txt", "w") as fp:
-            fp.write(message)
-        cv2.imwrite(save_prefix + ".png", img)
-
-        # debug
-        if debug:
-            for p in pts:
-                c = (int(p[0]), int(p[1]))
-                cv2.circle(img, c, 2, (0, 255, 0), -1)
-            cv2.imshow('img', img)
-            cv2.waitKey(1)
-    # remove full
-    rmtree(f"{out_dir}/full")
-
-    with open(done_flag, "w") as fp:
-        fp.write("")
-    
 
 def prepare_for_train_vocaset(out_root, src_root, speakers):
     tasks = []
@@ -237,16 +207,33 @@ if __name__ == "__main__":
     import argparse
 
     ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    CHOICES = ['prepare_vocaset']
+    CHOICES = ['prepare_vocaset', 'prepare_talk_video']
 
+    # # 8 speakers
+    # REAL3D_SPEAKERS = [
+    #     "FaceTalk_170725_00137_TA",
+    #     "FaceTalk_170728_03272_TA",
+    #     "FaceTalk_170731_00024_TA",
+    #     "FaceTalk_170809_00138_TA",
+    #     "FaceTalk_170811_03274_TA",
+    #     "FaceTalk_170904_00128_TA",
+    #     "FaceTalk_170912_03278_TA",
+    #     "FaceTalk_170915_00223_TA",
+    # ]
+
+    # 12 speakers (all)
     REAL3D_SPEAKERS = [
         "FaceTalk_170725_00137_TA",
         "FaceTalk_170728_03272_TA",
         "FaceTalk_170731_00024_TA",
         "FaceTalk_170809_00138_TA",
         "FaceTalk_170811_03274_TA",
+        "FaceTalk_170811_03275_TA",
         "FaceTalk_170904_00128_TA",
+        "FaceTalk_170904_03276_TA",
+        "FaceTalk_170908_03277_TA",
         "FaceTalk_170912_03278_TA",
+        "FaceTalk_170913_03279_TA",
         "FaceTalk_170915_00223_TA",
     ]
 
@@ -263,8 +250,8 @@ if __name__ == "__main__":
     if args.mode == "prepare_vocaset":
         vocaset_data_dir = os.path.join(args.data_dir, "train")
         prepare_for_train_vocaset(vocaset_data_dir, args.vocaset_dir, REAL3D_SPEAKERS)
-
-        # spk_dir = os.path.join(args.celebtalk_dir, "Processed", args.speaker, "clips_cropped")
-        # use_seqs = args.use_seqs
-        # prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, use_seqs=use_seqs, training=True)
-        # prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, use_seqs=use_seqs, training=False)
+    elif args.mode == "prepare_talk_video":
+        out_dir = args.data_dir
+        src_dir = args.source_dir.format(args.data_src, args.speaker)
+        prepare_talk_video(out_dir, src_dir, args.data_src, debug=args.debug, training=True)
+        prepare_talk_video(out_dir, src_dir, args.data_src, debug=args.debug, training=False)

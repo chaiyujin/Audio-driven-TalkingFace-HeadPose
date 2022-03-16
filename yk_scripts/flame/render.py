@@ -29,7 +29,18 @@ def render_results_for(spk_root, fps, dump_meshes=False):
     # TODO: load identity
     # iden = np.load(os.path.join(spk_root, "data", "identity", "shape.npy"))
     # iden = torch.tensor(iden, dtype=torch.float32, device=device)
-    iden_verts = load_mesh("assets/FLAME_sample.obj")[0]
+    possible_objs = [
+        os.path.join(spk_root, "identity.obj"),
+        os.path.join(spk_root, "data", "identity", "identity.obj"),
+    ]
+    iden_verts = None
+    for fpath in possible_objs:
+        if os.path.exists(fpath):
+            iden_verts = load_mesh(fpath)[0]
+            break
+    if iden_verts is None:
+        print("Use template identity! (Failed to find speaker identity in {})".format(spk_root))
+        iden_verts = load_mesh("assets/FLAME_sample.obj")[0]
 
     tasks = []
     for cur_root, subdirs, _ in os.walk(os.path.join(spk_root)):
