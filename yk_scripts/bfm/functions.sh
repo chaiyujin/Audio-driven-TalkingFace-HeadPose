@@ -3,7 +3,7 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-source yk_lib.sh
+source yk_scripts/lib.sh
 
 # * Global variables
 ERROR='\033[0;31m[ERROR]\033[0m'
@@ -20,7 +20,6 @@ function PrepareData() {
   local DATA_DIR=
   local SPEAKER=
   local DEBUG=
-  local USE_SEQS=
   # Override from arguments
   for var in "$@"; do
     case $var in
@@ -28,7 +27,6 @@ function PrepareData() {
       --data_dir=* ) DATA_DIR=${var#*=}  ;;
       --speaker=*  ) SPEAKER=${var#*=}   ;;
       --epoch=*    ) EPOCH=${var#*=}     ;;
-      --use_seqs=* ) USE_SEQS=${var#*=}  ;;
       --debug      ) DEBUG="--debug"     ;;
     esac
   done
@@ -38,7 +36,7 @@ function PrepareData() {
   [ -n "$SPEAKER"  ] || { echo "speaker is not set!";  exit 1; }
 
   # prepare data
-  if ! python3 yk_tools.py "prepare_${DATA_SRC}" --data_dir $DATA_DIR --speaker $SPEAKER --use_seqs $USE_SEQS ${DEBUG}; then
+  if ! python3 -m yk_scripts.bfm.tools "prepare_${DATA_SRC}" --data_dir $DATA_DIR --speaker $SPEAKER ${DEBUG}; then
     printf "${ERROR} Failed to prepare data for ${DATA_SRC}!\n"
     exit 1
   fi
@@ -114,7 +112,7 @@ function TrainR2V() {
   [ -n "$EPOCH"    ] || { echo "epoch is not set!";    exit 1; }
 
   # prepare data
-  if ! (python3 yk_tools.py build_r2v_dataset \
+  if ! (python3 -m yk_scripts.bfm.tools build_r2v_dataset \
           --data_dir  $DATA_DIR/../reconstructed \
           --data_type train ${DEBUG}) ; then
     printf "${ERROR} Failed to prepare data for render-to-video!\n"
@@ -271,7 +269,7 @@ function TestClip() {
   fi
 
   # prepare test data
-  python3 yk_tools.py build_r2v_dataset \
+  python3 -m yk_scripts.bfm.tools build_r2v_dataset \
     --data_dir  $RES_DIR \
     --data_type test \
     ${DEBUG} \
@@ -341,7 +339,6 @@ function TestClip() {
 function RUN_YK_EXP() {
   local DATA_SRC=
   local SPEAKER=
-  local USE_SEQS=
   local EPOCH_A2E=
   local EPOCH_R2V=
   local DEBUG=""
@@ -353,7 +350,6 @@ function RUN_YK_EXP() {
     case $var in
       --data_src=*  ) DATA_SRC=${var#*=}  ;;
       --speaker=*   ) SPEAKER=${var#*=}   ;;
-      --use_seqs=*  ) USE_SEQS=${var#*=}  ;;
       --epoch_a2e=* ) EPOCH_A2E=${var#*=} ;;
       --epoch_r2v=* ) EPOCH_R2V=${var#*=} ;;
       --test        ) TEST="true"         ;;
@@ -370,7 +366,7 @@ function RUN_YK_EXP() {
   DATA_SRC="${DATA_SRC,,}"
 
   # other variables
-  local EXP_DIR="$CWD/yk_exp/$DATA_SRC/$SPEAKER"
+  local EXP_DIR="$CWD/yk_exp/bfm/$DATA_SRC/$SPEAKER"
   local NET_DIR="$EXP_DIR/checkpoints"
   local RES_DIR="$EXP_DIR/results"
   local DATA_DIR="$EXP_DIR/data"
@@ -385,7 +381,7 @@ function RUN_YK_EXP() {
   printf "Epoch R2V : $EPOCH_R2V\n"
 
   # Shared arguments
-  local SHARED="--data_src=${DATA_SRC} --data_dir=$DATA_DIR --net_dir=$NET_DIR --speaker=$SPEAKER --use_seqs=$USE_SEQS ${DEBUG}"
+  local SHARED="--data_src=${DATA_SRC} --data_dir=$DATA_DIR --net_dir=$NET_DIR --speaker=$SPEAKER ${DEBUG}"
 
   # * Step 1: Prepare data into $DATA_DIR. Reconstructed results saved in $DATA_DIR/../reconstructed
   DRAW_DIVIDER; PrepareData $SHARED
@@ -403,34 +399,21 @@ function RUN_YK_EXP() {
   if [ -n "${TEST}" ]; then
     DRAW_DIVIDER;
 
-    for d in "$DATA_DIR/train"/*; do
+    for d in $DATA_DIR/**/*; do
       if [ ! -d "$d" ]; then continue; fi
-      local clip_id="$(basename $d)"
-      TestClip \
-        --src_audio_dir="$d" \
-        --tgt_video_dir="$d" \
-        --result_dir="$RES_DIR/$clip_id" \
-        --net_dir="$NET_DIR" \
-        --exp_dir=$EXP_DIR \
-        --epoch_a2e="$EPOCH_A2E" \
-        --epoch_r2v="$EPOCH_R2V" \
-        ${DUMP_MESHES} \
-      ;
-    done
-
-    for d in "$DATA_DIR/test"/*; do
-      if [ ! -d "$d" ]; then continue; fi
-      local clip_id="$(basename $d)"
-      TestClip \
-        --src_audio_dir="$d" \
-        --tgt_video_dir="$d" \
-        --result_dir="$RES_DIR/$clip_id" \
-        --net_dir="$NET_DIR" \
-        --exp_dir=$EXP_DIR \
-        --epoch_a2e="$EPOCH_A2E" \
-        --epoch_r2v="$EPOCH_R2V" \
-        ${DUMP_MESHES} \
-      ;
+      if [[ "$d" =~ clip-.* ]]; then
+        local clip_id="$(basename $d)"
+        TestClip \
+          --src_audio_dir="$d" \
+          --tgt_video_dir="$d" \
+          --result_dir="$RES_DIR/$clip_id" \
+          --net_dir="$NET_DIR" \
+          --exp_dir=$EXP_DIR \
+          --epoch_a2e="$EPOCH_A2E" \
+          --epoch_r2v="$EPOCH_R2V" \
+          ${DUMP_MESHES} \
+        ;
+      fi
     done
 
     local tgt_dir="$DATA_DIR/train/clip-trn-000"
