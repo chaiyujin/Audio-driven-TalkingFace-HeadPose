@@ -26,11 +26,13 @@ def find_clip_dirs(data_dir, with_train, with_test):
     # find clips
     clip_dirs = []
     for dirpath, subdirs, _ in os.walk(data_dir):
-        is_trn = dirpath.find('/train/') >= 0
-        is_tst = dirpath.find('/test/') >= 0
+        is_trn = dirpath.split('/')[-1] == 'train'
+        is_tst = dirpath.split('/')[-1] == 'test'
         if is_trn and not with_train:
             continue
         if is_tst and not with_test:
+            continue
+        if not is_trn and not is_tst:
             continue
         # collect
         for subdir in subdirs:
@@ -55,6 +57,11 @@ class MultiClips_1D_lstm_3dmm(data.Dataset):
         self.data_list = []
         self.coordinates = []
         clip_dirs = find_clip_dirs(os.path.abspath(dataset_dir), self.training, not self.training)
+
+        # make sure no validation sequence
+        if self.training:
+            for clip_dir in clip_dirs:
+                assert clip_dir.find("vld-") < 0
 
         for i_clip, clip_dir in enumerate(clip_dirs):
             print(">> {}".format(clip_dir))

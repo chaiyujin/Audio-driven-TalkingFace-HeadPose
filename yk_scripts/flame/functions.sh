@@ -100,6 +100,9 @@ function TestA2E() {
 # * ---------------------------------------------------------------------------------------------------------------- * #
 
 function PretrainGeneralOnVocaset() {
+  local EPOCH=$1
+  shift 1;
+
   local VOCA_EXP_DIR="$CWD/yk_exp/flame/vocaset"
   local VOCA_NET_DIR="$VOCA_EXP_DIR/checkpoints"
   local VOCA_DATA_DIR="$VOCA_EXP_DIR/data"
@@ -108,9 +111,7 @@ function PretrainGeneralOnVocaset() {
   python3 -m yk_scripts.flame.tools "prepare_vocaset" --data_dir ${VOCA_DATA_DIR} ${DEBUG};
 
   DRAW_DIVIDER;
-  TrainA2E --data_dir=${VOCA_DATA_DIR} --net_dir=${VOCA_NET_DIR} --epoch=100 --save_gap_epoch=10 --lr=0.0002;
-
-  echo "${VOCA_NET_DIR}/atcnet/atcnet_lstm_100.pth";
+  TrainA2E --data_dir=${VOCA_DATA_DIR} --net_dir=${VOCA_NET_DIR} --epoch=${EPOCH} --save_gap_epoch=${EPOCH} --lr=0.0002;
 }
 
 function RUN_YK_EXP() {
@@ -141,7 +142,8 @@ function RUN_YK_EXP() {
   DATA_SRC="${DATA_SRC,,}"
 
   # * Make sure VOCASET is used to pre-train a general model
-  local CKPT_GENERAL=$(PretrainGeneralOnVocaset);
+  PretrainGeneralOnVocaset 100;
+  local CKPT_GENERAL="$CWD/yk_exp/flame/vocaset/checkpoints/atcnet/atcnet_lstm_100.pth";
 
   # * Speaker specific model
   # other variables
@@ -173,8 +175,9 @@ function RUN_YK_EXP() {
   DRAW_DIVIDER;
   TrainA2E \
     --data_dir=${DATA_DIR} --net_dir=${NET_DIR} \
-    --epoch=${EPOCH_A2E} --save_gap_epoch=10 \
-    --lr=0.0001 --load_from=${CKPT_GENERAL};
+    --epoch=${EPOCH_A2E} --save_gap_epoch=${EPOCH_A2E} \
+    --lr=0.0001 --load_from="${CKPT_GENERAL}" \
+  ;
   
   # * Step 3: Test the trained model
   if [ -n "${TEST}" ]; then
