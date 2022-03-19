@@ -31,7 +31,7 @@ def load_graph(graph_filename):
 
 def demo(speaker_dir, output_dir):
     # input and output folder
-    img_list = glob.glob(os.path.join(speaker_dir, "train/clip**/crop/*.txt"), recursive=True)
+    img_list = glob.glob(os.path.join(speaker_dir, "**/clip**/crop/*.txt"), recursive=True)
     img_list = [e[:-4] + ".png" for e in img_list]
     img_list = sorted(img_list)
     print("img_list len:", len(img_list))
