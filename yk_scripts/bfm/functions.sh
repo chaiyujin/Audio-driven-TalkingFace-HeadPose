@@ -79,7 +79,7 @@ function TrainA2E() {
       --continue_train 1 --model_name ../model/atcnet_lstm_general.pth \
       --dataset multi_clips \
       --max_epochs ${EPOCH} \
-      --save_per_epochs ${EPOCH} \
+      --save_per_epochs 10 \
       --dataset_dir $DATA_DIR \
       --model_dir $NET_DIR/atcnet \
       --device_ids 0 \

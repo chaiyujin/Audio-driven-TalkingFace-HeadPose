@@ -175,7 +175,7 @@ function RUN_YK_EXP() {
   DRAW_DIVIDER;
   TrainA2E \
     --data_dir=${DATA_DIR} --net_dir=${NET_DIR} \
-    --epoch=${EPOCH_A2E} --save_gap_epoch=${EPOCH_A2E} \
+    --epoch=${EPOCH_A2E} --save_gap_epoch=10 \
     --lr=0.0001 --load_from="${CKPT_GENERAL}" \
   ;
   
