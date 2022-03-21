@@ -99,55 +99,55 @@ function TestA2E() {
 # *                                                Collection of steps                                               * #
 # * ---------------------------------------------------------------------------------------------------------------- * #
 
-function PretrainGeneralOnVocaset() {
-  local EPOCH=$1
-  shift 1;
-
-  local VOCA_EXP_DIR="$CWD/yk_exp/flame/vocaset"
-  local VOCA_NET_DIR="$VOCA_EXP_DIR/checkpoints"
-  local VOCA_DATA_DIR="$VOCA_EXP_DIR/data"
-
-  DRAW_DIVIDER;
-  python3 -m yk_scripts.flame.tools "prepare_vocaset" --data_dir ${VOCA_DATA_DIR} ${DEBUG};
-
-  DRAW_DIVIDER;
-  TrainA2E --data_dir=${VOCA_DATA_DIR} --net_dir=${VOCA_NET_DIR} --epoch=${EPOCH} --save_gap_epoch=${EPOCH} --lr=0.0002;
-}
-
 function RUN_YK_EXP() {
   local DATA_SRC=
   local SPEAKER=
-  local USE_SEQS=
-  local EPOCH_A2E=50
+  local AVOFFSET_MS=
+  local EPOCH_A2E=
   local DEBUG=""
   local TEST=""
   local MEDIA_LIST=""
   # Override from arguments
   for var in "$@"; do
     case $var in
-      --data_src=*  ) DATA_SRC=${var#*=}  ;;
-      --speaker=*   ) SPEAKER=${var#*=}   ;;
-      --use_seqs=*  ) USE_SEQS=${var#*=}  ;;
-      --epoch_a2e=* ) EPOCH_A2E=${var#*=} ;;
-      --test        ) TEST="true"         ;;
-      --media_list=*) MEDIA_LIST=${var#*=};;
-      --debug       ) DEBUG="--debug"     ;;
+      --data_src=*   ) DATA_SRC=${var#*=}    ;;
+      --speaker=*    ) SPEAKER=${var#*=}     ;;
+      --avoffset_ms=*) AVOFFSET_MS=${var#*=} ;;
+      --epoch_a2e=*  ) EPOCH_A2E=${var#*=}   ;;
+      --test         ) TEST="true"           ;;
+      --media_list=* ) MEDIA_LIST=${var#*=}  ;;
+      --debug        ) DEBUG="--debug"       ;;
     esac
   done
   # Check variables
   [ -n "$DATA_SRC"  ] || { echo "data_src is not set!";   exit 1; }
   [ -n "$SPEAKER"   ] || { echo "speaker is not set!";   exit 1; }
-  [ -n "$EPOCH_A2E" ] || { echo "epoch_a2e is not set!"; exit 1; }
   # to lower case
   DATA_SRC="${DATA_SRC,,}"
 
+  local PREFIX="$CWD/yk_exp/flame/avoffset"
+  if [ -n "${AVOFFSET_MS}" ]; then
+    PREFIX+="_corrected"
+  fi
+
   # * Make sure VOCASET is used to pre-train a general model
-  PretrainGeneralOnVocaset 100;
-  local CKPT_GENERAL="$CWD/yk_exp/flame/vocaset/checkpoints/atcnet/atcnet_lstm_100.pth";
+  local VOCA_EXP_DIR="$PREFIX/vocaset"
+  local VOCA_NET_DIR="$VOCA_EXP_DIR/checkpoints"
+  local VOCA_DATA_DIR="$VOCA_EXP_DIR/data"
+  DRAW_DIVIDER;
+  if [ -n "$AVOFFSET_MS" ]; then
+    python3 -m yk_scripts.flame.tools "prepare_vocaset" --data_dir ${VOCA_DATA_DIR} --avoffset_ms ${AVOFFSET_MS} ${DEBUG};
+  else
+    python3 -m yk_scripts.flame.tools "prepare_vocaset" --data_dir ${VOCA_DATA_DIR} ${DEBUG};
+  fi
+
+  DRAW_DIVIDER;
+  TrainA2E --data_dir=${VOCA_DATA_DIR} --net_dir=${VOCA_NET_DIR} --epoch=100 --save_gap_epoch=50 --lr=0.0002;
+  local CKPT_GENERAL="${VOCA_NET_DIR}/atcnet/atcnet_lstm_100.pth";
 
   # * Speaker specific model
   # other variables
-  local EXP_DIR="$CWD/yk_exp/flame/$DATA_SRC/$SPEAKER"
+  local EXP_DIR="$PREFIX/$DATA_SRC/$SPEAKER"
   local NET_DIR="$EXP_DIR/checkpoints"
   local RES_DIR="$EXP_DIR/results"
   local DATA_DIR="$EXP_DIR/data"
@@ -160,24 +160,27 @@ function RUN_YK_EXP() {
   printf "Results   : $RES_DIR\n"
   printf "Epoch A2E : $EPOCH_A2E\n"
 
-  # Shared arguments
-  local SHARED="--data_src=${DATA_SRC} --data_dir=$DATA_DIR --net_dir=$NET_DIR --speaker=$SPEAKER --use_seqs=$USE_SEQS ${DEBUG}"
-
-  # * Step 1: Prepare data into $DATA_DIR. Reconstructed results saved in $DATA_DIR/../reconstructed
+  # * Step 1: Prepare data into $DATA_DIR.
   DRAW_DIVIDER;
-  python3 -m yk_scripts.flame.tools "prepare_talk_video" \
-    --data_src ${DATA_SRC} \
-    --speaker  ${SPEAKER}  \
-    --data_dir ${DATA_DIR} \
+  if [ -n "$AVOFFSET_MS" ]; then
+    python3 -m yk_scripts.flame.tools "prepare_talk_video" \
+      --data_src ${DATA_SRC} --speaker  ${SPEAKER} --data_dir ${DATA_DIR} --avoffset_ms ${AVOFFSET_MS} \
     ${DEBUG};
+  else
+    python3 -m yk_scripts.flame.tools "prepare_talk_video" \
+      --data_src ${DATA_SRC} --speaker  ${SPEAKER} --data_dir ${DATA_DIR} \
+    ${DEBUG};
+  fi
 
   # * Step 2: Fintune Audio to Expression Network
-  DRAW_DIVIDER;
-  TrainA2E \
-    --data_dir=${DATA_DIR} --net_dir=${NET_DIR} \
-    --epoch=${EPOCH_A2E} --save_gap_epoch=10 \
-    --lr=0.0001 --load_from="${CKPT_GENERAL}" \
-  ;
+  if [ -n "${EPOCH_A2E}" ]; then
+    DRAW_DIVIDER;
+    TrainA2E \
+      --data_dir=${DATA_DIR} --net_dir=${NET_DIR} \
+      --epoch=${EPOCH_A2E} --save_gap_epoch=10 \
+      --lr=0.0001 --load_from="${CKPT_GENERAL}" \
+    ;
+  fi
   
   # * Step 3: Test the trained model
   if [ -n "${TEST}" ]; then

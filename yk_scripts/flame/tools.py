@@ -18,6 +18,15 @@ from ..meshio import load_mesh
 regex = re.compile(r'frame\d+\.png')
 
 
+def _correct_avoffset_for_visual(vframes, avoffset):
+    if avoffset > 0:  # audio ts larger than video, so delay video
+        padding = vframes[:1].repeat(avoffset, axis=0)
+        new_vframes = np.concatenate((padding, vframes), axis=0)
+        return new_vframes
+    elif avoffset < 0:  # audio ts smaller than video, so clip video
+        return vframes[-avoffset:]
+
+
 def interpolate_features(features, input_rate, output_rate, output_len=None):
     num_features = features.shape[1]
     input_len = features.shape[0]
@@ -67,7 +76,7 @@ def get_mfcc_extend(test_file, save_file):
     return mfcc
 
 
-def prepare_talk_video(output_root, data_root, data_src, training, dest_size=256, debug=False, use_seqs=()):
+def prepare_talk_video(output_root, data_root, data_src, avoffset_ms, training, dest_size=256, debug=False):
     # output root
     output_root = os.path.expanduser(output_root)
     output_root = os.path.join(output_root, "train" if training else "test")
@@ -123,6 +132,7 @@ def prepare_talk_video(output_root, data_root, data_src, training, dest_size=256
         # audio feature
         if not os.path.exists(os.path.join(out_dir, "audio/mfcc.npy")):
             get_mfcc_extend(os.path.join(out_dir, "audio/audio.wav"), os.path.join(out_dir, "audio/mfcc.npy"))
+
         # coeffs
         if not os.path.exists(os.path.join(out_dir, "coeffs.npy")):
             coeffs = []
@@ -135,8 +145,20 @@ def prepare_talk_video(output_root, data_root, data_src, training, dest_size=256
                 coeff = np.concatenate((jaw, exp))
                 assert len(coeff) == 53
                 coeffs.append(coeff)
-            coeffs = interpolate_features(np.asarray(coeffs), fps, output_rate=25.0).astype(np.float32)
+            coeffs = np.asarray(coeffs)
+            
+            # > Correct avoffset
+            if avoffset_ms is not None:
+                avoffset = int(np.round(fps * avoffset_ms / 1000.0))
+                assert avoffset == info['avoffset'] and avoffset_ms == info['avoffset_ms'], \
+                    "Given avoffset_ms {} != data's {}".format(avoffset_ms, info['avoffset_ms'])
+                tqdm.write("> Correct avoffset {} ms".format(avoffset_ms)) 
+                coeffs = _correct_avoffset_for_visual(coeffs, avoffset)
+
+            # downsample to 25fps
+            coeffs = interpolate_features(coeffs, fps, output_rate=25.0).astype(np.float32)
             np.save(os.path.join(out_dir, "coeffs.npy"), coeffs)
+
         # offsets
         if not os.path.exists(os.path.join(out_dir, "offsets.npy")):
             offsets = []
@@ -146,13 +168,23 @@ def prepare_talk_video(output_root, data_root, data_src, training, dest_size=256
                 verts = np.load(fpath)
                 offsets.append(verts - iden_verts)  # remove identity
             offsets = np.asarray(offsets)
+
+            # > Correct avoffset
+            if avoffset_ms is not None:
+                avoffset = int(np.round(fps * avoffset_ms / 1000.0))
+                assert avoffset == info['avoffset'] and avoffset_ms == info['avoffset_ms'], \
+                    "Given avoffset_ms {} != data's {}".format(avoffset_ms, info['avoffset_ms'])
+                tqdm.write("> Correct avoffset {} ms".format(avoffset_ms)) 
+                offsets = _correct_avoffset_for_visual(offsets, avoffset)
+            
+            # downsample to 25fps
             offsets = np.reshape(offsets, (len(offsets), -1))
             offsets = interpolate_features(offsets, fps, output_rate=25.0)
             offsets = np.reshape(offsets, (len(offsets), -1, 3)).astype(np.float32)
             np.save(os.path.join(out_dir, "offsets.npy"), offsets)
 
 
-def prepare_for_train_vocaset(out_root, src_root, speakers):
+def prepare_for_train_vocaset(out_root, src_root, speakers, avoffset_ms):
     tasks = []
     for speaker in speakers:
         for sent_id in range(1, 41):
@@ -177,6 +209,17 @@ def prepare_for_train_vocaset(out_root, src_root, speakers):
             with open(os.path.join(src_dir, "info.json")) as fp:
                 info = json.load(fp)
                 fps = info['fps']
+
+            # > Correct avoffset
+            if avoffset_ms is not None:
+                avoffset_ms = info['avoffset_ms']
+                avoffset = int(np.round(fps * avoffset_ms / 1000.0))
+                assert avoffset == info['avoffset'] and avoffset_ms == info['avoffset_ms'], \
+                    "Given avoffset_ms {} != data's {}".format(avoffset_ms, info['avoffset_ms'])
+                tqdm.write("> Correct avoffset {} ms for VOCASET".format(avoffset_ms)) 
+                offsets = _correct_avoffset_for_visual(offsets, avoffset)
+
+            # downsample to 25fps
             offsets = np.reshape(offsets, (len(offsets), -1))
             offsets = interpolate_features(offsets, fps, output_rate=25.0)
             offsets = np.reshape(offsets, (len(offsets), -1, 3)).astype(np.float32)
@@ -199,7 +242,19 @@ def prepare_for_train_vocaset(out_root, src_root, speakers):
                 coeff = np.concatenate((jaw, exp))
                 assert len(coeff) == 53
                 coeffs.append(coeff)
-            coeffs = interpolate_features(np.asarray(coeffs), fps, output_rate=25.0).astype(np.float32)
+            coeffs = np.asarray(coeffs)
+
+            # > Correct avoffset
+            if avoffset_ms is not None:
+                avoffset_ms = info['avoffset_ms']
+                avoffset = int(np.round(fps * avoffset_ms / 1000.0))
+                assert avoffset == info['avoffset'] and avoffset_ms == info['avoffset_ms'], \
+                    "Given avoffset_ms {} != data's {}".format(avoffset_ms, info['avoffset_ms'])
+                tqdm.write("> Correct avoffset {} ms for VOCASET".format(avoffset_ms)) 
+                coeffs = _correct_avoffset_for_visual(coeffs, avoffset)
+
+            # downsample to 25fps
+            coeffs = interpolate_features(coeffs, fps, output_rate=25.0).astype(np.float32)
             np.save(os.path.join(out_dir, "coeffs.npy"), coeffs)
 
 
@@ -242,6 +297,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default=f"{ROOT}/yk_exp/vocaset/data")
     parser.add_argument("--data_src", type=str)
     parser.add_argument("--speaker", type=str)
+    parser.add_argument("--avoffset_ms", type=float)
     parser.add_argument("--source_dir", type=str, default="../../stylized-sa/data/datasets/talk_video/{}/data/{}")
     parser.add_argument("--vocaset_dir", type=str, default="../../stylized-sa/data/datasets/flame_mesh/vocaset_data")
     parser.add_argument("--debug", action="store_true")
@@ -249,9 +305,9 @@ if __name__ == "__main__":
 
     if args.mode == "prepare_vocaset":
         vocaset_data_dir = os.path.join(args.data_dir, "train")
-        prepare_for_train_vocaset(vocaset_data_dir, args.vocaset_dir, REAL3D_SPEAKERS)
+        prepare_for_train_vocaset(vocaset_data_dir, args.vocaset_dir, REAL3D_SPEAKERS, args.avoffset_ms)
     elif args.mode == "prepare_talk_video":
         out_dir = args.data_dir
         src_dir = args.source_dir.format(args.data_src, args.speaker)
-        prepare_talk_video(out_dir, src_dir, args.data_src, debug=args.debug, training=True)
-        prepare_talk_video(out_dir, src_dir, args.data_src, debug=args.debug, training=False)
+        prepare_talk_video(out_dir, src_dir, args.data_src, args.avoffset_ms, debug=args.debug, training=True)
+        prepare_talk_video(out_dir, src_dir, args.data_src, args.avoffset_ms, debug=args.debug, training=False)

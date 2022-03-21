@@ -26,8 +26,9 @@ def find_clip_dirs(data_dir, with_train, with_test):
     # find clips
     clip_dirs = []
     for dirpath, subdirs, _ in os.walk(data_dir):
-        is_trn = dirpath.split('/')[-1] == 'train'
-        is_tst = dirpath.split('/')[-1] == 'test'
+        ss = dirpath.split('/')
+        is_trn = ss[-1] == 'train' or ss[-2] == 'train'
+        is_tst = ss[-1] == 'test'  or ss[-2] == 'test'
         if is_trn and not with_train:
             continue
         if is_tst and not with_test:
