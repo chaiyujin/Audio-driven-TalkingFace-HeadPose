@@ -30,6 +30,10 @@ def load_graph(graph_filename):
 
 
 def demo(speaker_dir, output_dir):
+    speaker_dir = os.path.abspath(os.path.expanduser(speaker_dir))
+    output_dir = os.path.abspath(os.path.expanduser(output_dir))
+    spk_root = os.path.dirname(speaker_dir)
+    assert spk_root == os.path.dirname(output_dir)
     # input and output folder
     img_list = glob.glob(os.path.join(speaker_dir, "**/clip**/crop/*.txt"), recursive=True)
     img_list = [e[:-4] + ".png" for e in img_list]
@@ -121,6 +125,21 @@ def demo(speaker_dir, output_dir):
                 savemat(os.path.join(save_dir_coeff, fname + ".mat"), {"coeff": coef, "lm_5p": lm_new2 - lm_new})
     t2 = time.time()
     print("Total n:", n, "Time:", t2 - t1)
+
+    # load identity
+    npy_iden = os.path.join(spk_root, "results", "iden.npy")
+    if not os.path.exists(npy_iden):
+        recons_dir = os.path.join(output_dir, "train")
+        files = glob.glob(os.path.join(recons_dir, "**/frame*.mat"), recursive=True)
+        all_ids = []
+        for mat_path in files:
+            iden = loadmat(mat_path)["coeff"][0]
+            all_ids.append(iden)
+        iden = np.asarray(all_ids).mean(0, keepdims=True).astype(np.float32)
+        np.save(os.path.join(output_dir, "iden.npy"), iden)
+        os.makedirs(os.path.dirname(npy_iden), exist_ok=True)
+        np.save(npy_iden, iden)
+    iden = np.load(npy_iden)
 
 
 if __name__ == "__main__":

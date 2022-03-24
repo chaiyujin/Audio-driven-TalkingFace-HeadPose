@@ -352,7 +352,6 @@ function RUN_YK_EXP() {
   # Check variables
   [ -n "$DATA_SRC"  ] || { echo "data_src is not set!";   exit 1; }
   [ -n "$SPEAKER"   ] || { echo "speaker is not set!";   exit 1; }
-  [ -n "$EPOCH_A2E" ] || { echo "epoch_a2e is not set!"; exit 1; }
   # to lower case
   DATA_SRC="${DATA_SRC,,}"
 
@@ -394,7 +393,10 @@ function RUN_YK_EXP() {
   cd $CWD;
 
   # * Step 2: Fintune Audio to Expression Network
-  DRAW_DIVIDER; TrainA2E $SHARED --epoch=$EPOCH_A2E
+  if [ -n "$EPOCH_A2E" ]; then
+    DRAW_DIVIDER;
+    TrainA2E $SHARED --epoch=$EPOCH_A2E
+  fi
 
   # * Step 3: (Optional) Finetune neural renderer
   if [ -n "${EPOCH_R2V}" ]; then
