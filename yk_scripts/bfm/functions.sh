@@ -34,17 +34,6 @@ function PrepareData() {
   [ -n "$DATA_SRC" ] || { echo "data_src is not set!"; exit 1; }
   [ -n "$DATA_DIR" ] || { echo "data_dir is not set!"; exit 1; }
   [ -n "$SPEAKER"  ] || { echo "speaker is not set!";  exit 1; }
-
-  # prepare data
-  if ! python3 -m yk_scripts.bfm.tools "prepare_${DATA_SRC}" --data_dir $DATA_DIR --speaker $SPEAKER ${DEBUG}; then
-    printf "${ERROR} Failed to prepare data for ${DATA_SRC}!\n"
-    exit 1
-  fi
-
-  cd $CWD/Deep3DFaceReconstruction && \
-    RUN_WITH_LOCK_GUARD --tag="reconstruct" --lock_file="$DATA_DIR/../done_recons.lock" -- \
-    python3 yk_reconstruct.py $DATA_DIR $DATA_DIR/../reconstructed && \
-  cd $CWD;
 }
 
 # * -------------------------------------------- Train Audio2Expression -------------------------------------------- * #
@@ -339,6 +328,7 @@ function TestClip() {
 function RUN_YK_EXP() {
   local DATA_SRC=
   local SPEAKER=
+  local CORRECT_AVOFFSET=
   local EPOCH_A2E=
   local EPOCH_R2V=
   local DEBUG=""
@@ -350,6 +340,7 @@ function RUN_YK_EXP() {
     case $var in
       --data_src=*  ) DATA_SRC=${var#*=}  ;;
       --speaker=*   ) SPEAKER=${var#*=}   ;;
+      --correct_avoffset) CORRECT_AVOFFSET='--correct_avoffset' ;;
       --epoch_a2e=* ) EPOCH_A2E=${var#*=} ;;
       --epoch_r2v=* ) EPOCH_R2V=${var#*=} ;;
       --test        ) TEST="true"         ;;
@@ -365,8 +356,13 @@ function RUN_YK_EXP() {
   # to lower case
   DATA_SRC="${DATA_SRC,,}"
 
+  local PREFIX="$CWD/yk_exp/bfm/avoffset"
+  if [ -n "$CORRECT_AVOFFSET" ]; then
+    PREFIX+="_corrected"
+  fi
+
   # other variables
-  local EXP_DIR="$CWD/yk_exp/bfm/$DATA_SRC/$SPEAKER"
+  local EXP_DIR="$PREFIX/$DATA_SRC/$SPEAKER"
   local NET_DIR="$EXP_DIR/checkpoints"
   local RES_DIR="$EXP_DIR/results"
   local DATA_DIR="$EXP_DIR/data"
@@ -384,7 +380,18 @@ function RUN_YK_EXP() {
   local SHARED="--data_src=${DATA_SRC} --data_dir=$DATA_DIR --net_dir=$NET_DIR --speaker=$SPEAKER ${DEBUG}"
 
   # * Step 1: Prepare data into $DATA_DIR. Reconstructed results saved in $DATA_DIR/../reconstructed
-  DRAW_DIVIDER; PrepareData $SHARED
+  DRAW_DIVIDER;
+  # prepare
+  python3 -m yk_scripts.bfm.tools "prepare_${DATA_SRC}" \
+    --data_dir $DATA_DIR \
+    --speaker  $SPEAKER  \
+    ${CORRECT_AVOFFSET}  \
+  ${DEBUG};
+  # reconstruct
+  cd $CWD/Deep3DFaceReconstruction && \
+    RUN_WITH_LOCK_GUARD --tag="reconstruct" --lock_file="$DATA_DIR/../done_recons.lock" -- \
+    python3 yk_reconstruct.py $DATA_DIR $DATA_DIR/../reconstructed && \
+  cd $CWD;
 
   # * Step 2: Fintune Audio to Expression Network
   DRAW_DIVIDER; TrainA2E $SHARED --epoch=$EPOCH_A2E

@@ -279,6 +279,7 @@ if __name__ == "__main__":
     parser.add_argument("--speaker", type=str, default="FaceTalk_170908_03277_TA")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--data_type", type=str, choices=['train', 'test'])
+    parser.add_argument("--correct_avoffset", action='store_true')
     args = parser.parse_args()
 
     if args.mode == "prepare_vocaset":
@@ -287,6 +288,9 @@ if __name__ == "__main__":
         prepare_vocaset(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=False)
     elif args.mode == "prepare_celebtalk":
         spk_dir = os.path.join(args.celebtalk_dir, "Processed", args.speaker, "clips_cropped")
+        if args.correct_avoffset:
+            print(">>> Correct avoffset !!!")
+            spk_dir += "_avoffset_corrected"
         prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=True)
         prepare_celebtalk(args.data_dir, spk_dir, dest_size=args.dest_size, debug=args.debug, training=False)
     elif args.mode == "build_r2v_dataset":
