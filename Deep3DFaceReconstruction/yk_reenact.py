@@ -29,13 +29,14 @@ def load_graph(graph_filename):
     return graph_def
 
 
-def demo(src_dir, tgt_dir):
+def demo(src_dir, tgt_dir, iden_npy):
 
     def _iframe(x):
         return int(os.path.basename(os.path.splitext(x)[0]).replace("frame", ""))
 
     src_dir = os.path.abspath(src_dir)
     tgt_dir = os.path.abspath(tgt_dir)
+    iden_coeff = np.load(iden_npy)
 
     # input and output folder
     coeff_list = glob.glob(os.path.join(src_dir, "coeff_pred/*.npy"))
@@ -128,13 +129,14 @@ def demo(src_dir, tgt_dir):
                 # cv2.waitKey(1)
 
                 coef = sess.run(coeff, feed_dict={images: input_img})
-
-                # ! replace expression part from predicted coefficients
-                coef[:, 80:144] = coeff_pred[:64]
+                
+                # replace 
+                coef[:, :80] = iden_coeff[:, :80]  # identity from reconstruction
+                coef[:, 80:144] = coeff_pred[:64]  # expression from prediction
                 # rigid is untouched
-                if False:
-                    coef[:, 224:227] = coeff_pred[64:64+3]
-                    coef[:, 254:257] = coeff_pred[64+3:64+6]
+                # if False:
+                #     coef[:, 224:227] = coeff_pred[64:64+3]
+                #     coef[:, 254:257] = coeff_pred[64+3:64+6]
 
                 face_shape_r, face_norm_r, face_color, tri = Reconstruction_for_render(coef, facemodel)
                 final_images = sess.run(
@@ -166,4 +168,4 @@ def demo(src_dir, tgt_dir):
 
 
 if __name__ == "__main__":
-    demo(sys.argv[1], sys.argv[2])
+    demo(sys.argv[1], sys.argv[2], sys.argv[3])

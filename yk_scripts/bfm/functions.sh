@@ -148,7 +148,7 @@ function TrainR2V() {
       --dataname bmold_win3 \
       --niter_decay 0 \
       --niter           ${EPOCH} \
-      --save_epoch_freq 20 \
+      --save_epoch_freq ${EPOCH} \
       --checkpoints_dir ${NET_DIR}/r2v \
     && cd ${CWD}) ; then
       printf "${ERROR} Failed to train render-to-video network!\n"
@@ -235,26 +235,26 @@ function TestClip() {
     && \
   cd $CWD
 
-  # # reenact with predicted coefficients
-  # cd $CWD/Deep3DFaceReconstruction && \
-  #   RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
-  #   python3 yk_reenact.py ${RES_DIR} ${TGT_DIR} && \
-  # cd $CWD
-  # local vpath_render="$RES_DIR/reenact-render.mp4"
-  # if [ ! -f "$vpath_render" ]; then
-  #   mkdir -p "$(dirname $vpath_render)"
-  #   ffmpeg -y -loglevel error \
-  #     -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d.png \
-  #     -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d_render.png \
-  #     -thread_queue_size 8192 -i $AUDIO_PATH \
-  #     -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
-  #     $vpath_render \
-  #   ;
-  # fi
-
   # * Return if don't have R2V
   if [ -z "${EPOCH_R2V}" ]; then
     return
+  fi
+
+  # reenact with predicted coefficients
+  cd $CWD/Deep3DFaceReconstruction && \
+    RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
+    python3 yk_reenact.py ${RES_DIR} ${TGT_DIR} ${EXP_DIR}/reconstructed/iden.npy && \
+  cd $CWD
+  local vpath_render="$RES_DIR/render-reenact.mp4"
+  if [ ! -f "$vpath_render" ]; then
+    mkdir -p "$(dirname $vpath_render)"
+    ffmpeg -y -loglevel error \
+      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d.png \
+      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d_render.png \
+      -thread_queue_size 8192 -i $AUDIO_PATH \
+      -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
+      $vpath_render \
+    ;
   fi
 
   # prepare test data
@@ -286,7 +286,7 @@ function TestClip() {
     python3 yk_test.py \
       --model yk_memory_seq \
       --name memory_seq_p2p \
-      --num_test 200 \
+      --num_test 100000 \
       --imagefolder '' \
       --epoch ${EPOCH_R2V} \
       --dataroot ${RES_DIR}/r2v_dataset \
@@ -301,15 +301,14 @@ function TestClip() {
     touch ${r2v_flag};
   fi
 
-  python3 utils/blend_results.py \
-    --image_dir  ${TGT_DIR}/crop \
-    --coeff_dir  ${RES_DIR}/reenact/coeff \
-    --r2v_dir    ${RES_DIR}/reenact/r2v \
-    --output_dir ${RES_DIR}/results \
-  ;
-
-  local vpath_render="$RES_DIR-r2v.mp4"
+  local vpath_render="$RES_DIR/r2v.mp4"
   if [ ! -f "$vpath_render" ]; then
+    python3 utils/blend_results.py \
+      --image_dir  ${TGT_DIR}/crop \
+      --coeff_dir  ${RES_DIR}/reenact/coeff \
+      --r2v_dir    ${RES_DIR}/reenact/r2v \
+      --output_dir ${RES_DIR}/results \
+    ;
     mkdir -p "$(dirname $vpath_render)"
     ffmpeg -y -loglevel error \
       -thread_queue_size 8192 -i ${RES_DIR}/results/%06d_real.png \
