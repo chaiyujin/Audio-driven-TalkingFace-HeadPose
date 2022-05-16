@@ -1,19 +1,17 @@
-import glob
 import os
-import pdb
 import sys
 import time
+from glob import glob
 
-import cv2
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-from scipy.io import loadmat, savemat
+from scipy.io import savemat
 from tqdm import tqdm
 
 from load_data import BFM, load_img, load_lm3d, transferBFM09
-from preprocess_img import Preprocess, Preprocess2
-from reconstruct_mesh import Reconstruction, Reconstruction_for_render, Render_layer
+from preprocess_img import Preprocess
+from reconstruct_mesh import Reconstruction_for_render, Render_layer
 
 
 def create_dirs(dirpath):
@@ -29,23 +27,27 @@ def load_graph(graph_filename):
     return graph_def
 
 
-def demo(src_dir, tgt_dir, iden_npy):
+def demo(src_dir, tgt_dir, static_frame):
 
     def _iframe(x):
         return int(os.path.basename(os.path.splitext(x)[0]).replace("frame", ""))
 
-    src_dir = os.path.abspath(src_dir)
-    tgt_dir = os.path.abspath(tgt_dir)
-    iden_coeff = np.load(iden_npy)
+    src_dir = os.path.abspath(src_dir)  # source data dir
+    tgt_dir = os.path.abspath(tgt_dir)  # target re-enacting data dir
+    # iden_coeff = np.load(iden_npy)
 
     # input and output folder
-    coeff_list = glob.glob(os.path.join(src_dir, "coeff_pred/*.npy"))
+    coeff_list = glob(os.path.join(src_dir, "coeff_pred/*.npy"))
     coeff_list = sorted(coeff_list, key=_iframe)
-    # for x in coeff_list:
-    #     assert x.find("test") >= 0
 
     # get target images
-    image_list = sorted(glob.glob(os.path.join(tgt_dir, "crop/frame*.png")), key=_iframe)
+    image_list = sorted(glob(os.path.join(tgt_dir, "crop/frame*.png")), key=_iframe)
+    n_frames_tar = len(image_list)
+
+    # check static_frame is valid
+    static_frame = int(static_frame)
+    if static_frame < 0:
+        static_frame = None
 
     # read BFM face model
     # transfer original BFM model to our model
@@ -82,6 +84,8 @@ def demo(src_dir, tgt_dir, iden_npy):
             for iframe, file in enumerate(tqdm(coeff_list, desc="reenact")):
                 n += 1
                 assert iframe == _iframe(file)
+
+                # makedirs for results
                 fname = "frame" + str(iframe)
                 save_dir_coeff = os.path.join(src_dir, "reenact/coeff")
                 save_dir_render = os.path.join(src_dir, "reenact/render")
@@ -92,59 +96,36 @@ def demo(src_dir, tgt_dir, iden_npy):
                 coeff_pred = np.load(file)
 
                 # load images and corresponding 5 facial landmarks
-                file = image_list[iframe]
-                assert iframe == _iframe(file)
+                if static_frame is not None:
+                    k = static_frame % n_frames_tar
+                else:
+                    # bounce at two boundaries
+                    d = iframe // n_frames_tar
+                    if d % 2 == 0:  # increasing direction
+                        k = iframe % n_frames_tar
+                    else:  # decreasing direction
+                        k = (n_frames_tar - 1) - iframe & n_frames_tar
+                file = image_list[k]
                 img, lm = load_img(file, file[:-4] + ".txt")
 
                 # preprocess input image
-                input_img, lm_new, transform_params = Preprocess(img, lm, lm3D)
-
-                # w0, h0 = transform_params[:2]
-                # s = transform_params[2]
-                # t = transform_params[3:]
-                # w2 = (w0*s).astype(np.int32)
-                # h2 = (h0*s).astype(np.int32)
-
-                # # crop the image to 224*224 from image center
-                # left = (112 - w2/2).astype(np.int32)
-                # up = (112 - h2/2).astype(np.int32)
-                # right = left + w2
-                # below = up + h2
-
-                # rec_img = Image.fromarray(input_img[0])
-                # rec_img = rec_img.crop((left, up, right, below))
-                # rec_img = rec_img.resize((w0, h0), resample = Image.LANCZOS)
-                # rec_img = rec_img.transform(rec_img.size, Image.AFFINE, (1, 0, w0/2 - t[0] , 0, 1,  t[1] - h0/2))
-                # warp_dst = np.array(rec_img)
-                # rx0, ry0 = t[0] - w0/2, h0/2 - t[1] 
-                # rx1, ry1 = rx0 + w0, ry0 + h0
-                # rx0, ry0 = max(0, int(np.ceil(rx0))), max(0, int(np.ceil(ry0)))
-                # rx1, ry1 = min(w0, int(np.floor(rx1))), min(h0, int(np.floor(ry1)))
-                # valid = warp_dst.copy()
-                # valid[ry0:ry1, rx0:rx1] = 255
-
-                # cv2.imshow('img', np.array(img))
-                # cv2.imshow('img-valid', valid)
-                # cv2.imshow('img-scale', warp_dst)
-                # cv2.waitKey(1)
-
+                input_img, _, transform_params = Preprocess(img, lm, lm3D)
                 coef = sess.run(coeff, feed_dict={images: input_img})
                 
                 # replace 
-                coef[:, :80] = iden_coeff[:, :80]  # identity from reconstruction
-                coef[:, 80:144] = coeff_pred[:64]  # expression from prediction
-                # rigid is untouched
-                # if False:
-                #     coef[:, 224:227] = coeff_pred[64:64+3]
-                #     coef[:, 254:257] = coeff_pred[64+3:64+6]
-
-                face_shape_r, face_norm_r, face_color, tri = Reconstruction_for_render(coef, facemodel)
+                # identity from reconstruction
+                # coef[:, :80] = iden_coeff[:, :80]  # type: ignore
+                # expression from prediction
+                coef[:, 80:144] = coeff_pred[:64]  # type: ignore
+                
+                # reconstruct image
+                face_shape_r, face_norm_r, face_color, _ = Reconstruction_for_render(coef, facemodel)
                 final_images = sess.run(
                     rendered,
                     feed_dict={
                         faceshaper: face_shape_r.astype("float32"),
                         facenormr: face_norm_r.astype("float32"),
-                        facecolor: face_color.astype("float32"),
+                        facecolor: face_color.astype("float32"),  # type: ignore
                     },
                 )
                 result_image = final_images[0, :, :, :]

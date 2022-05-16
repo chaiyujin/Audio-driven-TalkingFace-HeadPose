@@ -39,14 +39,14 @@ from util import html
 # save image to the disk
 def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     image_dir = webpage.get_image_dir()
-    ss = image_path[0].split('/')
-    clip_id = ss[-1]
-    for i in range(len(ss)-2, 1, -1):
-        subdir = ss[i]
-        if subdir.startswith('clip-'):
-            clip_id = subdir
-            break
-    assert clip_id.startswith('clip-')
+    # ss = image_path[0].split('/')
+    # clip_id = ss[-1]
+    # for i in range(len(ss)-2, 1, -1):
+    #     subdir = ss[i]
+    #     if subdir.startswith('clip-'):
+    #         clip_id = subdir
+    #         break
+    # assert clip_id.startswith('clip-')
     short_path = ntpath.basename(image_path[0])
     short_path1 = ntpath.basename(ntpath.dirname(image_path[0]))
     short_path = short_path1 + '-' + short_path

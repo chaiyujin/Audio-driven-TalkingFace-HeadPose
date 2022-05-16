@@ -176,23 +176,26 @@ function TestClip() {
   local EPOCH_A2E=
   local EPOCH_R2V=
   local DUMP_MESHES=
+  local STATIC_FRAME=-1
   local DEBUG=
   # Override from arguments
   for var in "$@"; do
     case $var in
-      --audio_path=*    ) AUDIO_PATH=${var#*=};;
-      --src_audio_dir=* ) SRC_DIR=${var#*=}   ;;
-      --tgt_video_dir=* ) TGT_DIR=${var#*=}   ;;
-      --result_dir=*    ) RES_DIR=${var#*=}   ;;
-      --net_dir=*       ) NET_DIR=${var#*=}   ;;
-      --exp_dir=*       ) EXP_DIR=${var#*=}   ;;
-      --epoch_a2e=*     ) EPOCH_A2E=${var#*=} ;;
-      --epoch_r2v=*     ) EPOCH_R2V=${var#*=} ;;
+      --audio_path=*    ) AUDIO_PATH=${var#*=}  ;;
+      --src_audio_dir=* ) SRC_DIR=${var#*=}     ;;
+      --tgt_video_dir=* ) TGT_DIR=${var#*=}     ;;
+      --result_dir=*    ) RES_DIR=${var#*=}     ;;
+      --net_dir=*       ) NET_DIR=${var#*=}     ;;
+      --exp_dir=*       ) EXP_DIR=${var#*=}     ;;
+      --epoch_a2e=*     ) EPOCH_A2E=${var#*=}   ;;
+      --epoch_r2v=*     ) EPOCH_R2V=${var#*=}   ;;
+      --static_frame=*  ) STATIC_FRAME=${var#*=};;
       --dump_meshes     ) DUMP_MESHES="--dump_meshes"  ;;
       --debug           ) DEBUG="--debug"  ;;
     esac
   done
-  # check
+
+  # check args
   if [ -z "$SRC_DIR" ] && [ -z "$AUDIO_PATH" ] ; then 
     echo "src_audio_dir is not set!";
     exit 1;
@@ -200,7 +203,8 @@ function TestClip() {
   [ -n "$TGT_DIR"   ] || { echo "tgt_video_dir is not set!"; exit 1; }
   [ -n "$RES_DIR"   ] || { echo "result_dir is not set!";    exit 1; }
   [ -n "$EPOCH_A2E" ] || { echo "epoch_a2e is not set!";     exit 1; }
-
+  
+  # auto set audio path
   if [ -z "$AUDIO_PATH" ]; then
     AUDIO_PATH="$SRC_DIR/audio/audio.wav"
   fi
@@ -208,14 +212,14 @@ function TestClip() {
   # Make sure it's audio file and save it into res dir
   mkdir -p $RES_DIR;
   local TMP_APATH="$RES_DIR/audio.wav"
-  ffmpeg -loglevel error -i "${AUDIO_PATH}" -ac 1 -ar 16000 $TMP_APATH -y;
+  if [ ! -f "${TMP_APATH}" ]; then
+    ffmpeg -loglevel error -i "${AUDIO_PATH}" -ac 1 -ar 16000 $TMP_APATH -y;
+  fi
   AUDIO_PATH=$TMP_APATH;
-
-  local CKPT_A2C="${NET_DIR}/atcnet/atcnet_lstm_${EPOCH_A2E}.pth"
-
   printf "Running test for '${AUDIO_PATH}', reenacting video '${TGT_DIR}'\n"
 
   # predict coefficients from audio
+  local CKPT_A2C="${NET_DIR}/atcnet/atcnet_lstm_${EPOCH_A2E}.pth"
   cd $CWD/Audio/code && \
   python3 yk_atcnet_test.py --pose 1 --relativeframe 0 --dataset multi_clips --device_ids 0 \
     --model_name "${CKPT_A2C}" \
@@ -239,23 +243,22 @@ function TestClip() {
   if [ -z "${EPOCH_R2V}" ]; then
     return
   fi
+  
+  local SRC_CLIP_ID="$(basename $RES_DIR)"
+  local TGT_CLIP_ID="$(basename $TGT_DIR)"
+  local NAME="reenact-${TGT_CLIP_ID}"
+
+  local OUT_VPATH="$RES_DIR/${NAME}-r2v.mp4"
+  if [ -f "${OUT_VPATH}" ]; then
+    echo "'${OUT_VPATH}' exists. Skip."
+    return
+  fi
 
   # reenact with predicted coefficients
   cd $CWD/Deep3DFaceReconstruction && \
     RUN_WITH_LOCK_GUARD --tag="reenact" --lock_file="${RES_DIR}/done_reenact.lock" -- \
-    python3 yk_reenact.py ${RES_DIR} ${TGT_DIR} ${EXP_DIR}/reconstructed/iden.npy && \
+    python3 yk_reenact.py ${RES_DIR} ${TGT_DIR} ${STATIC_FRAME} && \
   cd $CWD
-  local vpath_render="$RES_DIR/render-reenact.mp4"
-  if [ ! -f "$vpath_render" ]; then
-    mkdir -p "$(dirname $vpath_render)"
-    ffmpeg -y -loglevel error \
-      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d.png \
-      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d_render.png \
-      -thread_queue_size 8192 -i $AUDIO_PATH \
-      -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
-      $vpath_render \
-    ;
-  fi
 
   # prepare test data
   python3 -m yk_scripts.bfm.tools build_r2v_dataset \
@@ -264,8 +267,22 @@ function TestClip() {
     ${DEBUG} \
   ;
 
+  # debug visualization
+  local vpath_render="$RES_DIR/${NAME}-debug.mp4"
+  if [ ! -f "$vpath_render" ]; then
+    mkdir -p "$(dirname $vpath_render)"
+    ffmpeg -y -loglevel error \
+      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d.png \
+      -thread_queue_size 8192 -i $RES_DIR/reenact/render/frame%d_render.png \
+      -thread_queue_size 8192 -i $RES_DIR/reenact/render/bm/frame%d_renderold_bm.png \
+      -thread_queue_size 8192 -i $AUDIO_PATH \
+      -filter_complex hstack=inputs=3 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
+      $vpath_render \
+    ;
+  fi
+
   # prepare arcface feature
-  local arcface_flag=${RES_DIR}/done_arcface.flag
+  local arcface_flag=${RES_DIR}/done_arcface.lock
   if [ -f "${arcface_flag}" ]; then
     printf "Arcface is already runned\n"
   else
@@ -278,7 +295,7 @@ function TestClip() {
     touch ${arcface_flag};
   fi
 
-  local r2v_flag=${RES_DIR}/done_r2v.flag
+  local r2v_flag=${RES_DIR}/done_r2v.lock
   if [ -f "${r2v_flag}" ]; then
     printf "Render-to-Video is already runned\n"
   else
@@ -301,23 +318,29 @@ function TestClip() {
     touch ${r2v_flag};
   fi
 
-  local vpath_render="$RES_DIR/r2v.mp4"
-  if [ ! -f "$vpath_render" ]; then
-    python3 utils/blend_results.py \
-      --image_dir  ${TGT_DIR}/crop \
-      --coeff_dir  ${RES_DIR}/reenact/coeff \
-      --r2v_dir    ${RES_DIR}/reenact/r2v \
-      --output_dir ${RES_DIR}/results \
-    ;
-    mkdir -p "$(dirname $vpath_render)"
-    ffmpeg -y -loglevel error \
-      -thread_queue_size 8192 -i ${RES_DIR}/results/%06d_real.png \
-      -thread_queue_size 8192 -i ${RES_DIR}/results/%06d_fake.png \
-      -thread_queue_size 8192 -i $AUDIO_PATH \
-      -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
-      $vpath_render \
-    ;
-  fi
+  # blend into full image
+  python3 utils/blend_results.py \
+    --image_dir  ${TGT_DIR}/crop \
+    --coeff_dir  ${RES_DIR}/reenact/coeff \
+    --r2v_dir    ${RES_DIR}/reenact/r2v \
+    --output_dir ${RES_DIR}/${NAME} \
+  ;
+  # generate video (also used as a lock file)
+  mkdir -p "$(dirname $OUT_VPATH)"
+  ffmpeg -y -loglevel error \
+    -thread_queue_size 8192 -i ${RES_DIR}/${NAME}/%06d_real.png \
+    -thread_queue_size 8192 -i ${RES_DIR}/${NAME}/%06d_fake.png \
+    -thread_queue_size 8192 -i $AUDIO_PATH \
+    -filter_complex hstack=inputs=2 -vcodec libx264 -preset slower -profile:v high -crf 18 -pix_fmt yuv420p -shortest \
+    $OUT_VPATH \
+  ;
+  # remove intermediate results
+  [ -d "${RES_DIR}/reenact"     ] && { rm -rf ${RES_DIR}/reenact;     }
+  [ -d "${RES_DIR}/r2v_dataset" ] && { rm -rf ${RES_DIR}/r2v_dataset; }
+  # remove lock files
+  [ -f "${RES_DIR}/done_arcface.lock" ] && { rm ${RES_DIR}/done_arcface.lock; }
+  [ -f "${RES_DIR}/done_reenact.lock" ] && { rm ${RES_DIR}/done_reenact.lock; }
+  [ -f "${RES_DIR}/done_r2v.lock"     ] && { rm ${RES_DIR}/done_r2v.lock;     }
 }
 
 # * ---------------------------------------------------------------------------------------------------------------- * #
@@ -421,6 +444,7 @@ function RUN_YK_EXP() {
           --epoch_r2v="$EPOCH_R2V" \
           ${DUMP_MESHES} \
         ;
+        exit 1;
       fi
     done
 
