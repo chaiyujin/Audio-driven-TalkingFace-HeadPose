@@ -430,7 +430,7 @@ function RUN_YK_EXP() {
   if [ -n "${TEST}" ]; then
     DRAW_DIVIDER;
 
-    for d in $DATA_DIR/**/*; do
+    for d in $DATA_DIR/test/*; do
       if [ ! -d "$d" ]; then continue; fi
       if [[ "$d" =~ clip-.* ]]; then
         local clip_id="$(basename $d)"
@@ -444,7 +444,6 @@ function RUN_YK_EXP() {
           --epoch_r2v="$EPOCH_R2V" \
           ${DUMP_MESHES} \
         ;
-        exit 1;
       fi
     done
 

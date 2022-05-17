@@ -93,6 +93,8 @@ def blend_results(output_dir, r2v_dir, coeff_dir, image_dir):
         cv2.imwrite(os.path.join(output_dir, f"{iframe:06d}_real.png"), img)
         cv2.imwrite(os.path.join(output_dir, f"{iframe:06d}_fake.png"), merged)
         cv2.imwrite(os.path.join(output_dir, f"{iframe:06d}_mask.png"), mask)
+        np.save(os.path.join(output_dir, f"{iframe:06d}_trans.npy"), transform_params)
+        # print(transform_params)
 
         # cv2.imshow("valid", mask)
         # masked = np.where((mask == 255).all(axis=-1, keepdims=True), merged, np.zeros_like(merged))
