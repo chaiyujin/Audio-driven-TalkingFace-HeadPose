@@ -281,20 +281,6 @@ function TestClip() {
     ;
   fi
 
-  # prepare arcface feature
-  local arcface_flag=${RES_DIR}/done_arcface.lock
-  if [ -f "${arcface_flag}" ]; then
-    printf "Arcface is already runned\n"
-  else
-    if ! (cd ${CWD}/render-to-video/arcface && python3 yk_test_batch.py \
-      --imglist ${RES_DIR}/r2v_dataset/list/testB/bmold.txt --gpu 0 \
-    && cd ${CWD}) ; then
-      printf "${ERROR} Failed to prepare arcface feature for render-to-video!\n"
-      exit 1
-    fi
-    touch ${arcface_flag};
-  fi
-
   local r2v_flag=${RES_DIR}/done_r2v.lock
   if [ -f "${r2v_flag}" ]; then
     printf "Render-to-Video is already runned\n"
@@ -338,7 +324,6 @@ function TestClip() {
   [ -d "${RES_DIR}/reenact"     ] && { rm -rf ${RES_DIR}/reenact;     }
   [ -d "${RES_DIR}/r2v_dataset" ] && { rm -rf ${RES_DIR}/r2v_dataset; }
   # remove lock files
-  [ -f "${RES_DIR}/done_arcface.lock" ] && { rm ${RES_DIR}/done_arcface.lock; }
   [ -f "${RES_DIR}/done_reenact.lock" ] && { rm ${RES_DIR}/done_reenact.lock; }
   [ -f "${RES_DIR}/done_r2v.lock"     ] && { rm ${RES_DIR}/done_r2v.lock;     }
 }
