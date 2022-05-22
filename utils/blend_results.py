@@ -74,16 +74,28 @@ def blend_results(output_dir, r2v_dir, coeff_dir, image_dir):
         msk_path = os.path.join(r2v_dir, f"bm-frame{iframe}_renderold_bm_fake_B_mask_vis.png")
         # r2v_path = os.path.join(os.path.dirname(r2v_dir), "reenact/render", "bm", f"frame{iframe}_renderold_bm.png")
 
+        im_r2v = cv2.imread(r2v_path)
+        im_msk = 255-cv2.imread(msk_path)
+
+        def _maskout_boundary(mask):
+            P = 4
+            mask[:P] = 0
+            mask[-P:] = 0
+            mask[:, :P] = 0
+            mask[:, -P:] = 0
+            return mask
+
+        im_msk = _maskout_boundary(im_msk)
+
         # transform back
         transform_params = loadmat(coe_path)["transform_params"]
         transform_params = [x[0,0] for x in transform_params[0]]
-        im_r2v = cv2.imread(r2v_path)
         im_inv, valid = inverse_transform(im_r2v, transform_params)
-        im_msk, _ = inverse_transform(255-cv2.imread(msk_path), transform_params)
+        im_msk, _ = inverse_transform(im_msk, transform_params)
 
         # get mask of face
-        mask = np.where(valid == 255, im_msk, np.zeros_like(im_msk))
-        mask = (np.all(mask >= 240, axis=-1, keepdims=True) * 255).astype(np.uint8)
+        mask: np.ndarray = np.where(valid == 255, im_msk, np.zeros_like(im_msk))
+        mask = (np.all(mask >= 250, axis=-1, keepdims=True) * 255).astype(np.uint8)
         mask = fill_hole(mask).repeat(3, axis=-1)
 
         # merge
