@@ -25,6 +25,8 @@ def _correct_avoffset_for_visual(vframes, avoffset):
         return new_vframes
     elif avoffset < 0:  # audio ts smaller than video, so clip video
         return vframes[-avoffset:]
+    else:
+        return vframes
 
 
 def interpolate_features(features, input_rate, output_rate, output_len=None):
@@ -118,7 +120,7 @@ def prepare_talk_video(output_root, data_root, data_src, avoffset_ms, training, 
     for src_dir in tqdm(tasks, desc=f"[prepare_talk_video]: {os.path.basename(data_root)}"):
         with open(os.path.join(src_dir, "info.json")) as fp:
             info = json.load(fp)
-            fps = info['fps']
+            fps = float(info['fps'])
         # output dir
         seq_id = os.path.basename(src_dir)
         fit_dir = os.path.join(data_root, "fitted", seq_id)
@@ -156,7 +158,9 @@ def prepare_talk_video(output_root, data_root, data_src, avoffset_ms, training, 
                 coeffs = _correct_avoffset_for_visual(coeffs, avoffset)
 
             # downsample to 25fps
-            coeffs = interpolate_features(coeffs, fps, output_rate=25.0).astype(np.float32)
+            coeffs = np.asarray(coeffs, dtype=np.float32)
+            if fps != 25.0:
+                coeffs = interpolate_features(coeffs, fps, output_rate=25.0).astype(np.float32)
             np.save(os.path.join(out_dir, "coeffs.npy"), coeffs)
 
         # offsets
@@ -178,9 +182,11 @@ def prepare_talk_video(output_root, data_root, data_src, avoffset_ms, training, 
                 offsets = _correct_avoffset_for_visual(offsets, avoffset)
             
             # downsample to 25fps
-            offsets = np.reshape(offsets, (len(offsets), -1))
-            offsets = interpolate_features(offsets, fps, output_rate=25.0)
-            offsets = np.reshape(offsets, (len(offsets), -1, 3)).astype(np.float32)
+            offsets = np.asarray(offsets, dtype=np.float32)
+            if fps != 25.0:
+                offsets = np.reshape(offsets, (len(offsets), -1))
+                offsets = interpolate_features(offsets, fps, output_rate=25.0)
+                offsets = np.reshape(offsets, (len(offsets), -1, 3)).astype(np.float32)
             np.save(os.path.join(out_dir, "offsets.npy"), offsets)
 
 
@@ -208,7 +214,7 @@ def prepare_for_train_vocaset(out_root, src_root, speakers, avoffset_ms):
             offsets = np.load(os.path.join(src_dir, "offsets.npy"))
             with open(os.path.join(src_dir, "info.json")) as fp:
                 info = json.load(fp)
-                fps = info['fps']
+                fps = float(info['fps'])
 
             # > Correct avoffset
             if avoffset_ms is not None:
@@ -220,15 +226,17 @@ def prepare_for_train_vocaset(out_root, src_root, speakers, avoffset_ms):
                 offsets = _correct_avoffset_for_visual(offsets, avoffset)
 
             # downsample to 25fps
-            offsets = np.reshape(offsets, (len(offsets), -1))
-            offsets = interpolate_features(offsets, fps, output_rate=25.0)
-            offsets = np.reshape(offsets, (len(offsets), -1, 3)).astype(np.float32)
+            offsets = np.asarray(offsets, dtype=np.float32)
+            if fps != 25.0:
+                offsets = np.reshape(offsets, (len(offsets), -1))
+                offsets = interpolate_features(offsets, fps, output_rate=25.0)
+                offsets = np.reshape(offsets, (len(offsets), -1, 3)).astype(np.float32)
             np.save(os.path.join(out_dir, "offsets.npy"), offsets)
         # coeffs
         if not os.path.exists(os.path.join(out_dir, "coeffs.npy")):
             with open(os.path.join(src_dir, "info.json")) as fp:
                 info = json.load(fp)
-                fps = info['fps']
+                fps = float(info['fps'])
             ss = src_dir.split('/')
             ss[-3] = 'vocaset_fitted'
             fit_dir = '/'.join(ss)
@@ -254,7 +262,9 @@ def prepare_for_train_vocaset(out_root, src_root, speakers, avoffset_ms):
                 coeffs = _correct_avoffset_for_visual(coeffs, avoffset)
 
             # downsample to 25fps
-            coeffs = interpolate_features(coeffs, fps, output_rate=25.0).astype(np.float32)
+            coeffs = np.asarray(coeffs, dtype=np.float32)
+            if fps != 25.0:
+                coeffs = interpolate_features(coeffs, fps, output_rate=25.0).astype(np.float32)
             np.save(os.path.join(out_dir, "coeffs.npy"), coeffs)
 
 
